@@ -117,3 +117,18 @@ export interface HistoryLog {
   tela: string; // ex: Empresas, Abastecimentos, etc.
   descricao: string; // Detalhes legíveis por humanos
 }
+
+export interface PresencaItem {
+  funcionarioId: string;
+  presente: boolean;
+  observacao?: string;
+}
+
+export interface ListaPresenca {
+  id: string;
+  data: string; // YYYY-MM-DD
+  obraId: string;
+  responsavel: string;
+  funcionarios: PresencaItem[];
+  observacoes?: string;
+}

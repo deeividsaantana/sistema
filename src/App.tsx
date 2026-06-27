@@ -16,7 +16,8 @@ import {
   Abastecimento, 
   Lubrificacao, 
   RdoDiario,
-  HistoryLog
+  HistoryLog,
+  ListaPresenca
 } from './types';
 
 import { 
@@ -31,7 +32,8 @@ import {
   INITIAL_ABASTECIMENTOS, 
   INITIAL_LUBRIFICACOES, 
   INITIAL_RDOS,
-  INITIAL_HISTORY_LOGS 
+  INITIAL_HISTORY_LOGS,
+  INITIAL_PRESENCAS
 } from './utils/initialData';
 
 // Subcomponents Imports
@@ -40,6 +42,7 @@ import CadastrosTab from './components/CadastrosTab';
 import LancamentosTab from './components/LancamentosTab';
 import RelatoriosTab from './components/RelatoriosTab';
 import ConfiguracoesTab from './components/ConfiguracoesTab';
+import ManutencaoTab from './components/ManutencaoTab';
 
 // Motion and Logo Import
 import { motion } from 'motion/react';
@@ -63,7 +66,8 @@ import {
   LogOut,
   FolderPlus,
   ShieldCheck,
-  Calendar
+  Calendar,
+  Users
 } from 'lucide-react';
 
 export default function App() {
@@ -94,6 +98,7 @@ export default function App() {
   const [abastecimentos, setAbastecimentos] = useState<Abastecimento[]>([]);
   const [lubrificacoes, setLubrificacoes] = useState<Lubrificacao[]>([]);
   const [rdos, setRdos] = useState<RdoDiario[]>([]);
+  const [listasPresenca, setListasPresenca] = useState<ListaPresenca[]>([]);
   const [historyLogs, setHistoryLogs] = useState<HistoryLog[]>([]);
 
   // Hydrate states from localstorage on mount
@@ -118,6 +123,7 @@ export default function App() {
       localStorage.setItem('renea_abastecimentos', JSON.stringify(INITIAL_ABASTECIMENTOS));
       localStorage.setItem('renea_lubrificacoes', JSON.stringify(INITIAL_LUBRIFICACOES));
       localStorage.setItem('renea_rdos', JSON.stringify(INITIAL_RDOS));
+      localStorage.setItem('renea_listas_presenca', JSON.stringify(INITIAL_PRESENCAS));
       localStorage.setItem('renea_history_logs', JSON.stringify(INITIAL_HISTORY_LOGS));
       localStorage.setItem('renea_data_loaded_v2', 'true');
 
@@ -132,6 +138,7 @@ export default function App() {
       setAbastecimentos(INITIAL_ABASTECIMENTOS);
       setLubrificacoes(INITIAL_LUBRIFICACOES);
       setRdos(INITIAL_RDOS);
+      setListasPresenca(INITIAL_PRESENCAS);
       setHistoryLogs(INITIAL_HISTORY_LOGS);
     } else {
       const savedEmpresas = localStorage.getItem('renea_empresas');
@@ -145,6 +152,7 @@ export default function App() {
       const savedAbastecimentos = localStorage.getItem('renea_abastecimentos');
       const savedLubrificacoes = localStorage.getItem('renea_lubrificacoes');
       const savedRdos = localStorage.getItem('renea_rdos');
+      const savedListasPresenca = localStorage.getItem('renea_listas_presenca');
       const savedHistory = localStorage.getItem('renea_history_logs');
 
       setEmpresas(savedEmpresas ? JSON.parse(savedEmpresas) : INITIAL_EMPRESAS);
@@ -158,9 +166,11 @@ export default function App() {
       setAbastecimentos(savedAbastecimentos ? JSON.parse(savedAbastecimentos) : INITIAL_ABASTECIMENTOS);
       setLubrificacoes(savedLubrificacoes ? JSON.parse(savedLubrificacoes) : INITIAL_LUBRIFICACOES);
       setRdos(savedRdos ? JSON.parse(savedRdos) : INITIAL_RDOS);
+      setListasPresenca(savedListasPresenca ? JSON.parse(savedListasPresenca) : INITIAL_PRESENCAS);
       setHistoryLogs(savedHistory ? JSON.parse(savedHistory) : INITIAL_HISTORY_LOGS);
     }
   }, []);
+
 
   // Check Firebase connection and load sync preferences on mount
   useEffect(() => {
@@ -764,6 +774,43 @@ export default function App() {
     );
   };
 
+  const handleSaveListaPresenca = (item: ListaPresenca, isNew: boolean) => {
+    let updated;
+    if (isNew) {
+      updated = [...listasPresenca, item];
+    } else {
+      updated = listasPresenca.map(x => x.id === item.id ? item : x);
+    }
+    const ob = obras.find(o => o.id === item.obraId);
+    saveAndLog(
+      'Manutenção', 
+      isNew ? 'Criou' : 'Editou', 
+      `${isNew ? 'Registrou' : 'Editou'} Lista de Presença para obra "${ob ? ob.nome : 'Geral'}" no dia ${item.data}.`,
+      historyLogs,
+      () => {
+        setListasPresenca(updated);
+        localStorage.setItem('renea_listas_presenca', JSON.stringify(updated));
+      }
+    );
+  };
+
+  const handleDeleteListaPresenca = (id: string) => {
+    const item = listasPresenca.find(x => x.id === id);
+    if (!item) return;
+    const updated = listasPresenca.filter(x => x.id !== id);
+    saveAndLog(
+      'Manutenção', 
+      'Excluiu', 
+      `Excluiu Lista de Presença do dia ${item.data}.`,
+      historyLogs,
+      () => {
+        setListasPresenca(updated);
+        localStorage.setItem('renea_listas_presenca', JSON.stringify(updated));
+      }
+    );
+  };
+
+
   // Administration helpers
   const handleImportData = (imported: {
     empresas: Empresa[];
@@ -777,6 +824,7 @@ export default function App() {
     abastecimentos: Abastecimento[];
     lubrificacoes: Lubrificacao[];
     rdos: RdoDiario[];
+    listasPresenca?: ListaPresenca[];
     historyLogs?: HistoryLog[];
   }) => {
     setEmpresas(imported.empresas || []);
@@ -790,6 +838,7 @@ export default function App() {
     setAbastecimentos(imported.abastecimentos || []);
     setLubrificacoes(imported.lubrificacoes || []);
     setRdos(imported.rdos || []);
+    setListasPresenca(imported.listasPresenca || []);
     
     const logs = imported.historyLogs || [{
       id: `log-${Date.now()}`,
@@ -812,6 +861,7 @@ export default function App() {
     localStorage.setItem('renea_abastecimentos', JSON.stringify(imported.abastecimentos || []));
     localStorage.setItem('renea_lubrificacoes', JSON.stringify(imported.lubrificacoes || []));
     localStorage.setItem('renea_rdos', JSON.stringify(imported.rdos || []));
+    localStorage.setItem('renea_listas_presenca', JSON.stringify(imported.listasPresenca || []));
     localStorage.setItem('renea_history_logs', JSON.stringify(logs));
   };
 
@@ -827,6 +877,7 @@ export default function App() {
     setAbastecimentos(INITIAL_ABASTECIMENTOS);
     setLubrificacoes(INITIAL_LUBRIFICACOES);
     setRdos(INITIAL_RDOS);
+    setListasPresenca(INITIAL_PRESENCAS);
     setHistoryLogs(INITIAL_HISTORY_LOGS);
 
     localStorage.setItem('renea_empresas', JSON.stringify(INITIAL_EMPRESAS));
@@ -840,6 +891,7 @@ export default function App() {
     localStorage.setItem('renea_abastecimentos', JSON.stringify(INITIAL_ABASTECIMENTOS));
     localStorage.setItem('renea_lubrificacoes', JSON.stringify(INITIAL_LUBRIFICACOES));
     localStorage.setItem('renea_rdos', JSON.stringify(INITIAL_RDOS));
+    localStorage.setItem('renea_listas_presenca', JSON.stringify(INITIAL_PRESENCAS));
     localStorage.setItem('renea_history_logs', JSON.stringify(INITIAL_HISTORY_LOGS));
   };
 
@@ -855,6 +907,7 @@ export default function App() {
     setAbastecimentos([]);
     setLubrificacoes([]);
     setRdos([]);
+    setListasPresenca([]);
     setHistoryLogs([{
       id: `log-${Date.now()}`,
       timestamp: new Date().toLocaleString('pt-BR'),
@@ -875,6 +928,7 @@ export default function App() {
     localStorage.setItem('renea_abastecimentos', JSON.stringify([]));
     localStorage.setItem('renea_lubrificacoes', JSON.stringify([]));
     localStorage.setItem('renea_rdos', JSON.stringify([]));
+    localStorage.setItem('renea_listas_presenca', JSON.stringify([]));
     localStorage.setItem('renea_history_logs', JSON.stringify([]));
   };
 
@@ -891,9 +945,11 @@ export default function App() {
       abastecimentos,
       lubrificacoes,
       rdos,
+      listasPresenca,
       historyLogs
     }, null, 2);
   };
+
 
   const handleImportFullData = (importedJson: string): boolean => {
     try {
@@ -1035,6 +1091,14 @@ export default function App() {
           </button>
 
           <button 
+            onClick={() => setActiveTab('manutencao')}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'manutencao' ? 'bg-emerald-600/15 text-emerald-400 border-l-4 border-emerald-500 pl-3' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-100'}`}
+          >
+            <Users className="w-4 h-4 shrink-0" />
+            Manutenção & Presença
+          </button>
+
+          <button 
             onClick={() => setActiveTab('reports')}
             className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'reports' ? 'bg-emerald-600/15 text-emerald-400 border-l-4 border-emerald-500 pl-3' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-100'}`}
           >
@@ -1135,6 +1199,13 @@ export default function App() {
                 className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'lancamentos' ? 'bg-emerald-600/15 text-emerald-400' : 'text-slate-400 hover:bg-slate-800'}`}
               >
                 <ClipboardList className="w-4.5 h-4.5" /> Lançamentos Diários
+              </button>
+
+              <button 
+                onClick={() => { setActiveTab('manutencao'); setIsMobileMenuOpen(false); }}
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'manutencao' ? 'bg-emerald-600/15 text-emerald-400' : 'text-slate-400 hover:bg-slate-800'}`}
+              >
+                <Users className="w-4.5 h-4.5" /> Manutenção & Presença
               </button>
 
               <button 
@@ -1264,6 +1335,16 @@ export default function App() {
                 onDeleteLubrificacao={handleDeleteLubrificacao}
                 onSaveRdo={handleSaveRdo}
                 onDeleteRdo={handleDeleteRdo}
+              />
+            )}
+
+            {activeTab === 'manutencao' && (
+              <ManutencaoTab 
+                funcionarios={funcionarios}
+                obras={obras}
+                listasPresenca={listasPresenca}
+                onSaveListaPresenca={handleSaveListaPresenca}
+                onDeleteListaPresenca={handleDeleteListaPresenca}
               />
             )}
 

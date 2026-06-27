@@ -15,7 +15,8 @@ import {
   Abastecimento, 
   Lubrificacao, 
   RdoDiario,
-  HistoryLog
+  HistoryLog,
+  ListaPresenca
 } from '../types';
 
 export const INITIAL_EMPRESAS: Empresa[] = [
@@ -244,3 +245,33 @@ export const INITIAL_HISTORY_LOGS: HistoryLog[] = [
   { id: 'log-2', timestamp: '2026-06-21 09:15:00', usuario: 'admin', acao: 'Criou', tela: 'Equipamentos', descricao: 'Importação inicial da frota de equipamentos ativos Renea.' },
   { id: 'log-3', timestamp: '2026-06-21 18:00:00', usuario: 'admin', acao: 'Criou', tela: 'Funcionários', descricao: 'Importação inicial dos 67 funcionários cadastrados.' }
 ];
+
+export const INITIAL_PRESENCAS: ListaPresenca[] = [
+  {
+    id: 'pre-1',
+    data: '2026-06-21',
+    obraId: 'obr-1',
+    responsavel: 'Espedito Bento da Silva',
+    funcionarios: [
+      { funcionarioId: 'fun-1', presente: true },
+      { funcionarioId: 'fun-2', presente: true },
+      { funcionarioId: 'fun-3', presente: false, observacao: 'Falta médica' },
+      { funcionarioId: 'fun-4', presente: true }
+    ],
+    observacoes: 'Início dos trabalhos da equipe de pavimentação.'
+  },
+  {
+    id: 'pre-2',
+    data: '2026-06-22',
+    obraId: 'obr-1',
+    responsavel: 'Espedito Bento da Silva',
+    funcionarios: [
+      { funcionarioId: 'fun-1', presente: true },
+      { funcionarioId: 'fun-2', presente: true },
+      { funcionarioId: 'fun-3', presente: true },
+      { funcionarioId: 'fun-4', presente: true }
+    ],
+    observacoes: 'Toda a equipe presente no canteiro.'
+  }
+];
+
