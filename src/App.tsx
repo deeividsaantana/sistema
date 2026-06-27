@@ -104,31 +104,62 @@ export default function App() {
       setIsLoggedIn(true);
     }
 
-    const savedEmpresas = localStorage.getItem('renea_empresas');
-    const savedObras = localStorage.getItem('renea_obras');
-    const savedEquipamentos = localStorage.getItem('renea_equipamentos');
-    const savedFuncionarios = localStorage.getItem('renea_funcionarios');
-    const savedComboios = localStorage.getItem('renea_comboios');
-    const savedCombustiveis = localStorage.getItem('renea_combustiveis');
-    const savedLubrificantes = localStorage.getItem('renea_lubrificantes');
-    const savedEtapas = localStorage.getItem('renea_etapas');
-    const savedAbastecimentos = localStorage.getItem('renea_abastecimentos');
-    const savedLubrificacoes = localStorage.getItem('renea_lubrificacoes');
-    const savedRdos = localStorage.getItem('renea_rdos');
-    const savedHistory = localStorage.getItem('renea_history_logs');
+    const isDataLoadedV2 = localStorage.getItem('renea_data_loaded_v2') === 'true';
 
-    setEmpresas(savedEmpresas ? JSON.parse(savedEmpresas) : INITIAL_EMPRESAS);
-    setObras(savedObras ? JSON.parse(savedObras) : INITIAL_OBRAS);
-    setEquipamentos(savedEquipamentos ? JSON.parse(savedEquipamentos) : INITIAL_EQUIPAMENTOS);
-    setFuncionarios(savedFuncionarios ? JSON.parse(savedFuncionarios) : INITIAL_FUNCIONARIOS);
-    setComboios(savedComboios ? JSON.parse(savedComboios) : INITIAL_COMBOIOS);
-    setCombustiveis(savedCombustiveis ? JSON.parse(savedCombustiveis) : INITIAL_TIPOS_COMBUSTIVEL);
-    setLubrificantes(savedLubrificantes ? JSON.parse(savedLubrificantes) : INITIAL_PRODUTOS_LUBRIFICACAO);
-    setEtapas(savedEtapas ? JSON.parse(savedEtapas) : INITIAL_ETAPAS_SERVICO);
-    setAbastecimentos(savedAbastecimentos ? JSON.parse(savedAbastecimentos) : INITIAL_ABASTECIMENTOS);
-    setLubrificacoes(savedLubrificacoes ? JSON.parse(savedLubrificacoes) : INITIAL_LUBRIFICACOES);
-    setRdos(savedRdos ? JSON.parse(savedRdos) : INITIAL_RDOS);
-    setHistoryLogs(savedHistory ? JSON.parse(savedHistory) : INITIAL_HISTORY_LOGS);
+    if (!isDataLoadedV2) {
+      localStorage.setItem('renea_empresas', JSON.stringify(INITIAL_EMPRESAS));
+      localStorage.setItem('renea_obras', JSON.stringify(INITIAL_OBRAS));
+      localStorage.setItem('renea_equipamentos', JSON.stringify(INITIAL_EQUIPAMENTOS));
+      localStorage.setItem('renea_funcionarios', JSON.stringify(INITIAL_FUNCIONARIOS));
+      localStorage.setItem('renea_comboios', JSON.stringify(INITIAL_COMBOIOS));
+      localStorage.setItem('renea_combustiveis', JSON.stringify(INITIAL_TIPOS_COMBUSTIVEL));
+      localStorage.setItem('renea_lubrificantes', JSON.stringify(INITIAL_PRODUTOS_LUBRIFICACAO));
+      localStorage.setItem('renea_etapas', JSON.stringify(INITIAL_ETAPAS_SERVICO));
+      localStorage.setItem('renea_abastecimentos', JSON.stringify(INITIAL_ABASTECIMENTOS));
+      localStorage.setItem('renea_lubrificacoes', JSON.stringify(INITIAL_LUBRIFICACOES));
+      localStorage.setItem('renea_rdos', JSON.stringify(INITIAL_RDOS));
+      localStorage.setItem('renea_history_logs', JSON.stringify(INITIAL_HISTORY_LOGS));
+      localStorage.setItem('renea_data_loaded_v2', 'true');
+
+      setEmpresas(INITIAL_EMPRESAS);
+      setObras(INITIAL_OBRAS);
+      setEquipamentos(INITIAL_EQUIPAMENTOS);
+      setFuncionarios(INITIAL_FUNCIONARIOS);
+      setComboios(INITIAL_COMBOIOS);
+      setCombustiveis(INITIAL_TIPOS_COMBUSTIVEL);
+      setLubrificantes(INITIAL_PRODUTOS_LUBRIFICACAO);
+      setEtapas(INITIAL_ETAPAS_SERVICO);
+      setAbastecimentos(INITIAL_ABASTECIMENTOS);
+      setLubrificacoes(INITIAL_LUBRIFICACOES);
+      setRdos(INITIAL_RDOS);
+      setHistoryLogs(INITIAL_HISTORY_LOGS);
+    } else {
+      const savedEmpresas = localStorage.getItem('renea_empresas');
+      const savedObras = localStorage.getItem('renea_obras');
+      const savedEquipamentos = localStorage.getItem('renea_equipamentos');
+      const savedFuncionarios = localStorage.getItem('renea_funcionarios');
+      const savedComboios = localStorage.getItem('renea_comboios');
+      const savedCombustiveis = localStorage.getItem('renea_combustiveis');
+      const savedLubrificantes = localStorage.getItem('renea_lubrificantes');
+      const savedEtapas = localStorage.getItem('renea_etapas');
+      const savedAbastecimentos = localStorage.getItem('renea_abastecimentos');
+      const savedLubrificacoes = localStorage.getItem('renea_lubrificacoes');
+      const savedRdos = localStorage.getItem('renea_rdos');
+      const savedHistory = localStorage.getItem('renea_history_logs');
+
+      setEmpresas(savedEmpresas ? JSON.parse(savedEmpresas) : INITIAL_EMPRESAS);
+      setObras(savedObras ? JSON.parse(savedObras) : INITIAL_OBRAS);
+      setEquipamentos(savedEquipamentos ? JSON.parse(savedEquipamentos) : INITIAL_EQUIPAMENTOS);
+      setFuncionarios(savedFuncionarios ? JSON.parse(savedFuncionarios) : INITIAL_FUNCIONARIOS);
+      setComboios(savedComboios ? JSON.parse(savedComboios) : INITIAL_COMBOIOS);
+      setCombustiveis(savedCombustiveis ? JSON.parse(savedCombustiveis) : INITIAL_TIPOS_COMBUSTIVEL);
+      setLubrificantes(savedLubrificantes ? JSON.parse(savedLubrificantes) : INITIAL_PRODUTOS_LUBRIFICACAO);
+      setEtapas(savedEtapas ? JSON.parse(savedEtapas) : INITIAL_ETAPAS_SERVICO);
+      setAbastecimentos(savedAbastecimentos ? JSON.parse(savedAbastecimentos) : INITIAL_ABASTECIMENTOS);
+      setLubrificacoes(savedLubrificacoes ? JSON.parse(savedLubrificacoes) : INITIAL_LUBRIFICACOES);
+      setRdos(savedRdos ? JSON.parse(savedRdos) : INITIAL_RDOS);
+      setHistoryLogs(savedHistory ? JSON.parse(savedHistory) : INITIAL_HISTORY_LOGS);
+    }
   }, []);
 
   // Check Firebase connection and load sync preferences on mount
@@ -1022,9 +1053,15 @@ export default function App() {
 
         {/* Database Status Info */}
         <div className="p-4 border-t border-slate-800 bg-slate-950/40 space-y-2 text-[10px] text-slate-500 font-mono">
-          <div className="flex items-center gap-1.5 text-emerald-500 font-bold mb-1">
-            <Database className="w-3.5 h-3.5" />
-            <span>Banco de Dados Local</span>
+          <div className="flex items-center justify-between gap-1.5 font-bold mb-1">
+            <div className="flex items-center gap-1.5 text-emerald-500">
+              <Database className="w-3.5 h-3.5" />
+              <span>Banco de Dados Local</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${isFirebaseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+              <span className={isFirebaseConnected ? 'text-emerald-400' : 'text-rose-500'}>Firebase</span>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-y-1 text-slate-400">
             <span>Frota: {equipamentos.length}</span>
