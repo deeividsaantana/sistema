@@ -536,6 +536,7 @@ export default function RelatoriosTab({
       }
 
       const filename = `Renea_Relatorio_${reportType}_${dataInicio}_a_${dataFim}.xls`;
+      const periodo = `${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')}`;
 
       let headers: string[] = [];
       let rows: string[][] = [];
@@ -648,52 +649,97 @@ export default function RelatoriosTab({
       }
 
       const colCount = headers.length;
+      const isResumo = reportType === 'resumo_obra';
+      const titleFontSize = isResumo ? '16pt' : '12pt';
+      const headerRowNumber = logoBase64 ? 5 : 4;
+      const autoFilterEndRow = headerRowNumber + Math.max(rows.length, 1);
 
-      let htmlContent = `
+      const escapeHtml = (value: string | number | null | undefined) => String(value ?? '—')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/\r?\n/g, '<br />');
+
+      const colWidth = (header: string) => {
+        const lower = header.toLowerCase();
+        if (lower.includes('obs') || lower.includes('pend') || lower.includes('serviço') || lower.includes('localização')) return 220;
+        if (lower.includes('equipamento') || lower.includes('propriet') || lower.includes('canteiro') || lower.includes('empresa')) return 170;
+        if (lower.includes('data') || lower.includes('hora') || lower.includes('frota') || lower.includes('prefixo')) return 85;
+        if (lower.includes('volume') || lower.includes('bomba') || lower.includes('quantidade') || lower.includes('total')) return 105;
+        return 130;
+      };
+
+      const colgroup = headers.map(h => `<col style="width:${colWidth(h)}px;" />`).join('');
+
+      const htmlContent = `
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
 <head>
 <meta charset="utf-8" />
 <style>
-  table { 
-    font-family: Arial, Helvetica, sans-serif; 
-    border-collapse: collapse; 
+  body {
+    margin: 0;
+    background: #FFFFFF;
+  }
+  table {
+    font-family: Arial, Helvetica, sans-serif;
+    border-collapse: collapse;
+    table-layout: fixed;
     width: 100%;
+    mso-table-lspace: 0pt;
+    mso-table-rspace: 0pt;
   }
-  th { 
-    background-color: #0F5132 !important; 
-    color: #FFFFFF !important; 
-    font-family: Arial, Helvetica, sans-serif; 
-    font-weight: bold; 
-    font-size: 11pt;
-    padding: 8px 12px; 
-    border: 1px solid #CBD5E1; 
-    text-align: left; 
-  }
-  td { 
-    font-family: Arial, Helvetica, sans-serif; 
+  th {
+    background-color: #D9D9D9 !important;
+    color: #000000 !important;
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: bold;
     font-size: 10pt;
-    padding: 6px 12px; 
-    border: 1px solid #E2E8F0; 
-    color: #334155; 
+    padding: 6px 8px;
+    border: 1px solid #000000;
+    text-align: left;
+    vertical-align: middle;
+    white-space: normal;
+    mso-wrap-style: square;
   }
-  tr.even { 
-    background-color: #F8FAFC; 
+  td {
+    background-color: #FFFFFF;
+    color: #000000;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 10pt;
+    padding: 5px 8px;
+    border: 1px solid #000000;
+    text-align: left;
+    vertical-align: top;
+    white-space: normal;
+    mso-wrap-style: square;
   }
-  tr.odd { 
-    background-color: #FFFFFF; 
+  .logo-cell {
+    border: none;
+    padding: 6px 0 4px 0;
+    background: #FFFFFF;
   }
   .title-cell {
+    border: none;
+    background: #FFFFFF;
+    color: #000000;
     font-family: Arial, Helvetica, sans-serif;
-    font-size: 16pt;
+    font-size: ${titleFontSize};
     font-weight: bold;
-    color: #0F5132;
-    padding-bottom: 4px;
+    padding: 4px 0 2px 0;
   }
   .subtitle-cell {
+    border: none;
+    background: #FFFFFF;
+    color: #000000;
     font-family: Arial, Helvetica, sans-serif;
     font-size: 10pt;
-    color: #64748B;
-    padding-bottom: 20px;
+    padding: 2px 0 10px 0;
+  }
+  .empty-row td {
+    border: 1px solid #000000;
+    height: 22px;
   }
 </style>
 <!--[if gte mso 9]>
@@ -701,10 +747,20 @@ export default function RelatoriosTab({
 <x:ExcelWorkbook>
 <x:ExcelWorksheets>
 <x:ExcelWorksheet>
-<x:Name>Relatório Renea</x:Name>
+<x:Name>${escapeHtml(title).substring(0, 31)}</x:Name>
 <x:WorksheetOptions>
-<x:AutoFilter />
+<x:FreezePanes />
+<x:FrozenNoSplit />
+<x:SplitHorizontal>${headerRowNumber}</x:SplitHorizontal>
+<x:TopRowBottomPane>${headerRowNumber + 1}</x:TopRowBottomPane>
+<x:ActivePane>2</x:ActivePane>
 <x:DisplayGridlines />
+<x:FitToPage />
+<x:Print>
+<x:FitWidth>1</x:FitWidth>
+<x:FitHeight>0</x:FitHeight>
+</x:Print>
+<x:AutoFilter x:Range="R${headerRowNumber}C1:R${autoFilterEndRow}C${colCount}" />
 </x:WorksheetOptions>
 </x:ExcelWorksheet>
 </x:ExcelWorksheets>
@@ -714,45 +770,36 @@ export default function RelatoriosTab({
 </head>
 <body>
   <table>
-      `;
-
-      if (logoBase64) {
-        htmlContent += `
+    <colgroup>${colgroup}</colgroup>
+    ${logoBase64 ? `
     <tr>
-      <td colspan="${colCount}" style="border: none; padding: 10px 0;">
+      <td colspan="${colCount}" class="logo-cell">
         <img src="${logoBase64}" width="150" height="60" />
       </td>
-    </tr>
-        `;
-      }
-
-      htmlContent += `
+    </tr>` : ''}
     <tr>
-      <td colspan="${colCount}" class="title-cell" style="border: none;">
-        RENEA INFRAESTRUTURA
-      </td>
+      <td colspan="${colCount}" class="title-cell">RENEA INFRAESTRUTURA</td>
     </tr>
     <tr>
-      <td colspan="${colCount}" class="subtitle-cell" style="border: none;">
-        Relatório: ${title} | Período: ${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')}
-      </td>
+      <td colspan="${colCount}" class="subtitle-cell">Relatório: ${escapeHtml(title)} | Período: ${escapeHtml(periodo)}</td>
     </tr>
     <thead>
       <tr>
-        ${headers.map(h => `<th>${h}</th>`).join('')}
+        ${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}
       </tr>
     </thead>
     <tbody>
-      ${rows.map((row, idx) => `
-      <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
-        ${row.map(cell => `<td>${cell}</td>`).join('')}
-      </tr>
-      `).join('')}
+      ${rows.length > 0 ? rows.map(row => `
+      <tr>
+        ${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}
+      </tr>`).join('') : `
+      <tr class="empty-row">
+        <td colspan="${colCount}">Nenhum registro encontrado para os filtros selecionados.</td>
+      </tr>`}
     </tbody>
   </table>
 </body>
-</html>
-      `;
+</html>`;
 
       const blob = new Blob([htmlContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
@@ -762,6 +809,7 @@ export default function RelatoriosTab({
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Erro ao exportar Excel:", error);
     } finally {

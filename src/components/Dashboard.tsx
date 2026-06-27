@@ -4,6 +4,8 @@
  */
 
 import React from 'react';
+import { useEquipamentosExternos } from '../hooks/useEquipamentosExternos';
+
 import { 
   Empresa, 
   ObraLocal, 
@@ -86,9 +88,11 @@ export default function Dashboard({
   // 1. Calculations & Metrics
   const totalLiters = abastecimentos.reduce((acc, curr) => acc + curr.quantidadeLitros, 0);
   
+  const equipamentosExternos = useEquipamentosExternos();
   const activeEquipments = equipamentos.filter(e => e.status === 'Ativo' || e.status === 'Mobilizado').length;
   const stoppedEquipments = equipamentos.filter(e => e.status === 'Parado' || e.status === 'Esperando motorista').length;
-  const maintenanceEquipments = equipamentos.filter(e => e.status === 'Manutenção').length;
+  const localMaintenanceEquipments = equipamentos.filter(e => e.status === 'Manutenção').length;
+  const maintenanceEquipments = equipamentosExternos.manutencao ?? localMaintenanceEquipments;
 
   // 2. Consumption by fleet (rank)
   const consumptionByFleet = equipamentos.map(eq => {
@@ -304,7 +308,9 @@ export default function Dashboard({
           <div>
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block font-mono">Em Manutenção</span>
             <span className="text-xl font-black text-white font-mono block mt-1">{maintenanceEquipments}</span>
-            <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">Oficina de campo / corretiva</span>
+            <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">
+              {equipamentosExternos.manutencao !== null ? 'Sincronizado com manutenção externa' : 'Oficina de campo / corretiva'}
+            </span>
           </div>
         </div>
       </div>
