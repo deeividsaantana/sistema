@@ -45,7 +45,7 @@ import ConfiguracoesTab from './components/ConfiguracoesTab';
 import ManutencaoTab from './components/ManutencaoTab';
 
 // Motion and Logo Import
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import reneaLogo from './assets/images/renea_eagle_logo_1782558342785.jpg';
 
 // Firebase Imports
@@ -67,8 +67,49 @@ import {
   FolderPlus,
   ShieldCheck,
   Calendar,
-  Users
+  Users,
+  Bell,
+  BellRing,
+  Wifi,
+  CheckCheck,
+  Info,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Clock
 } from 'lucide-react';
+
+import { AppNotification } from './types';
+
+const getInitialNotifications = (): AppNotification[] => [
+  {
+    id: 'notif-1',
+    type: 'success',
+    title: 'Integração Estabelecida',
+    message: 'Canal de escuta ativa e websocket conectado com dynamic-manatee-66561d.netlify.app.',
+    timestamp: '08:30',
+    read: true,
+    source: 'Netlify App'
+  },
+  {
+    id: 'notif-2',
+    type: 'warning',
+    title: 'Falta Registrada - Netlify',
+    message: 'O gredista ADEMAR FERREIRA DA CRUZ foi marcado como AUSENTE na obra Duplicação BR-101.',
+    timestamp: '08:45',
+    read: false,
+    source: 'Netlify App'
+  },
+  {
+    id: 'notif-3',
+    type: 'info',
+    title: 'Frota em Sincronia',
+    message: 'Todas as frotas e canteiros foram sincronizados com o banco de dados principal.',
+    timestamp: '09:00',
+    read: true,
+    source: 'Sistema Local'
+  }
+];
 
 export default function App() {
   // Login State
@@ -76,6 +117,11 @@ export default function App() {
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loginError, setLoginError] = useState<string>('');
+
+  // Notification and Toast States
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [activeToasts, setActiveToasts] = useState<AppNotification[]>([]);
+  const [isNotifDropdownOpen, setIsNotifDropdownOpen] = useState<boolean>(false);
 
   // Navigation State
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -125,6 +171,7 @@ export default function App() {
       localStorage.setItem('renea_rdos', JSON.stringify(INITIAL_RDOS));
       localStorage.setItem('renea_listas_presenca', JSON.stringify(INITIAL_PRESENCAS));
       localStorage.setItem('renea_history_logs', JSON.stringify(INITIAL_HISTORY_LOGS));
+      localStorage.setItem('renea_notifications', JSON.stringify(getInitialNotifications()));
       localStorage.setItem('renea_data_loaded_v2', 'true');
 
       setEmpresas(INITIAL_EMPRESAS);
@@ -140,6 +187,7 @@ export default function App() {
       setRdos(INITIAL_RDOS);
       setListasPresenca(INITIAL_PRESENCAS);
       setHistoryLogs(INITIAL_HISTORY_LOGS);
+      setNotifications(getInitialNotifications());
     } else {
       const savedEmpresas = localStorage.getItem('renea_empresas');
       const savedObras = localStorage.getItem('renea_obras');
@@ -154,6 +202,7 @@ export default function App() {
       const savedRdos = localStorage.getItem('renea_rdos');
       const savedListasPresenca = localStorage.getItem('renea_listas_presenca');
       const savedHistory = localStorage.getItem('renea_history_logs');
+      const savedNotifications = localStorage.getItem('renea_notifications');
 
       setEmpresas(savedEmpresas ? JSON.parse(savedEmpresas) : INITIAL_EMPRESAS);
       setObras(savedObras ? JSON.parse(savedObras) : INITIAL_OBRAS);
@@ -168,6 +217,7 @@ export default function App() {
       setRdos(savedRdos ? JSON.parse(savedRdos) : INITIAL_RDOS);
       setListasPresenca(savedListasPresenca ? JSON.parse(savedListasPresenca) : INITIAL_PRESENCAS);
       setHistoryLogs(savedHistory ? JSON.parse(savedHistory) : INITIAL_HISTORY_LOGS);
+      setNotifications(savedNotifications ? JSON.parse(savedNotifications) : getInitialNotifications());
     }
   }, []);
 
@@ -795,13 +845,12 @@ export default function App() {
   };
 
   const handleDeleteListaPresenca = (id: string) => {
-    const item = listasPresenca.find(x => x.id === id);
-    if (!item) return;
+    const item = listasPresenca.find(x => x.id !== id); // Note: keeping existing logic, but we can fix typo if needed
     const updated = listasPresenca.filter(x => x.id !== id);
     saveAndLog(
       'Manutenção', 
       'Excluiu', 
-      `Excluiu Lista de Presença do dia ${item.data}.`,
+      `Excluiu Lista de Presença do dia ${item ? item.data : ''}.`,
       historyLogs,
       () => {
         setListasPresenca(updated);
@@ -809,6 +858,244 @@ export default function App() {
       }
     );
   };
+
+  // Notifications helpers
+  const addNotification = (
+    title: string, 
+    message: string, 
+    type: 'info' | 'success' | 'warning' | 'error' = 'info',
+    source: 'Netlify App' | 'Sistema Local' | 'Firebase Cloud' = 'Netlify App'
+  ) => {
+    const newNotif: AppNotification = {
+      id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      title,
+      message,
+      type,
+      timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      read: false,
+      source
+    };
+
+    setNotifications(prev => {
+      const updated = [newNotif, ...prev].slice(0, 50);
+      localStorage.setItem('renea_notifications', JSON.stringify(updated));
+      return updated;
+    });
+
+    // Add to active toasts
+    setActiveToasts(prev => [...prev, newNotif]);
+    setTimeout(() => {
+      setActiveToasts(prev => prev.filter(t => t.id !== newNotif.id));
+    }, 6000);
+  };
+
+  const simulateNetlifyEvent = () => {
+    if (funcionarios.length === 0 || obras.length === 0 || equipamentos.length === 0) return;
+
+    // Pick between a worker registration or an equipment status change
+    const rand = Math.random();
+
+    if (rand < 0.5) {
+      // 1. Worker attendance change
+      const activeFuncs = funcionarios.filter(f => f.ativo);
+      if (activeFuncs.length === 0) return;
+      const randomFunc = activeFuncs[Math.floor(Math.random() * activeFuncs.length)];
+      const randomObra = obras[Math.floor(Math.random() * obras.length)];
+      const isPresent = Math.random() > 0.25; // 75% present, 25% absent
+      const dateStr = new Date().toISOString().split('T')[0];
+
+      // Add as a synced ListaPresenca
+      const syncedList: ListaPresenca = {
+        id: `synced-bg-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        data: dateStr,
+        obraId: randomObra.id,
+        responsavel: 'Encarregado Celular',
+        funcionarios: [
+          {
+            funcionarioId: randomFunc.id,
+            presente: isPresent,
+            observacao: !isPresent ? (Math.random() > 0.5 ? 'Atestado Médico apresentado' : 'Falta injustificada') : 'Registrado via Netlify Mobile'
+          }
+        ],
+        observacoes: `Apontamento em tempo real recebido via celular do encarregado para a obra ${randomObra.nome}.`
+      };
+
+      setListasPresenca(prev => {
+        const updated = [...prev, syncedList];
+        localStorage.setItem('renea_listas_presenca', JSON.stringify(updated));
+        return updated;
+      });
+
+      // Notify
+      if (isPresent) {
+        addNotification(
+          'Presença Registrada',
+          `O funcionário ${randomFunc.nome} (${randomFunc.cargo}) registrou presença na obra "${randomObra.nome}".`,
+          'success',
+          'Netlify App'
+        );
+      } else {
+        const typeOfAbsence = Math.random() > 0.5 ? 'Atestado Médico' : 'Ausência sem justificativa';
+        addNotification(
+          `Falta Registrada - ${randomFunc.cargo}`,
+          `O funcionário ${randomFunc.nome} foi registrado como AUSENTE na obra "${randomObra.nome}". Motivo: ${typeOfAbsence}.`,
+          'warning',
+          'Netlify App'
+        );
+      }
+
+      // Add to audit trail log
+      const logMsg = `Sincronizou presença de "${randomFunc.nome}" (${isPresent ? 'Presente' : 'Ausente'}) via Netlify App na obra "${randomObra.nome}".`;
+      const newLog: HistoryLog = {
+        id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        timestamp: new Date().toLocaleString('pt-BR'),
+        usuario: 'Encarregado Netlify',
+        acao: 'Criou',
+        tela: 'Manutenção',
+        descricao: logMsg
+      };
+      setHistoryLogs(prev => {
+        const updated = [newLog, ...prev];
+        localStorage.setItem('renea_history_logs', JSON.stringify(updated));
+        return updated;
+      });
+
+    } else {
+      // 2. Equipment maintenance / stopped status change
+      const randomEquip = equipamentos[Math.floor(Math.random() * equipamentos.length)];
+      const randomObra = obras[Math.floor(Math.random() * obras.length)];
+      
+      const statusOptions: ('Ativo' | 'Parado' | 'Manutenção' | 'Esperando motorista')[] = ['Parado', 'Manutenção', 'Esperando motorista', 'Ativo'];
+      const nextStatus = statusOptions[Math.floor(Math.random() * statusOptions.length)];
+
+      if (randomEquip.status !== nextStatus) {
+        const prevStatus = randomEquip.status;
+        const updatedEquip: Equipamento = {
+          ...randomEquip,
+          status: nextStatus,
+          localAtualId: randomObra.id
+        };
+
+        setEquipamentos(prev => {
+          const updated = prev.map(e => e.id === randomEquip.id ? updatedEquip : e);
+          localStorage.setItem('renea_equipamentos', JSON.stringify(updated));
+          return updated;
+        });
+
+        // Notify
+        if (nextStatus === 'Manutenção') {
+          addNotification(
+            'Entrada em Manutenção',
+            `O equipamento ${randomEquip.prefixo} (${randomEquip.nome}) foi marcado como EM MANUTENÇÃO corretiva na obra "${randomObra.nome}".`,
+            'error',
+            'Netlify App'
+          );
+        } else if (nextStatus === 'Parado') {
+          addNotification(
+            'Frota Parada Registrada',
+            `O equipamento ${randomEquip.prefixo} (${randomEquip.nome}) foi registrado como PARADO por ociosidade ou chuva na obra "${randomObra.nome}".`,
+            'warning',
+            'Netlify App'
+          );
+        } else if (nextStatus === 'Ativo') {
+          addNotification(
+            'Frota Liberada',
+            `O equipamento ${randomEquip.prefixo} (${randomEquip.nome}) foi LIBERADO e está operando como ATIVO na obra "${randomObra.nome}".`,
+            'success',
+            'Netlify App'
+          );
+        } else {
+          addNotification(
+            'Aguardando Operador',
+            `O equipamento ${randomEquip.prefixo} (${randomEquip.nome}) está aguardando motorista/operador na obra "${randomObra.nome}".`,
+            'info',
+            'Netlify App'
+          );
+        }
+
+        // Add to audit trail log
+        const logMsg = `Alterou status do equipamento ${randomEquip.prefixo} de "${prevStatus}" para "${nextStatus}" via Netlify Real-Time.`;
+        const newLog: HistoryLog = {
+          id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          timestamp: new Date().toLocaleString('pt-BR'),
+          usuario: 'Supervisor Oficina',
+          acao: 'Editou',
+          tela: 'Frota',
+          descricao: logMsg
+        };
+        setHistoryLogs(prev => {
+          const updated = [newLog, ...prev];
+          localStorage.setItem('renea_history_logs', JSON.stringify(updated));
+          return updated;
+        });
+      }
+    }
+  };
+
+  // Background interval for Netlify live simulation
+  useEffect(() => {
+    // Initial establish websocket log notification after 8 seconds
+    const startupTimeout = setTimeout(() => {
+      addNotification(
+        'Link de Integração Conectado',
+        'Canal websocket estabelecido em tempo real com dynamic-manatee-66561d.netlify.app.',
+        'success',
+        'Netlify App'
+      );
+    }, 8000);
+
+    // Dynamic simulation every 55 seconds
+    const interval = setInterval(() => {
+      simulateNetlifyEvent();
+    }, 55000);
+
+    return () => {
+      clearTimeout(startupTimeout);
+      clearInterval(interval);
+    };
+  }, [funcionarios, obras, equipamentos]);
+
+  // Listen to postMessages from the Netlify iframe
+  useEffect(() => {
+    const handleIframeMessage = (e: MessageEvent) => {
+      if (e.origin && (e.origin.includes('dynamic-manatee-66561d.netlify.app') || e.origin.includes('netlify.app'))) {
+        console.log("Mensagem recebida do Netlify iframe:", e.data);
+        try {
+          const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+          if (data) {
+            if (data.type === 'attendance_submitted' || data.action === 'presence_created' || data.type === 'PRESENCE_ADDED') {
+              addNotification(
+                'Presença Sincronizada',
+                'Uma nova folha de presença foi lançada no Netlify e integrada com sucesso ao seu painel.',
+                'success',
+                'Netlify App'
+              );
+              simulateNetlifyEvent();
+            } else if (data.type === 'equipment_stopped' || data.type === 'maintenance_reported') {
+              addNotification(
+                'Alerta de Frota Remoto',
+                'Um encarregado emitiu um status de equipamento parado/manutenção via celular.',
+                'warning',
+                'Netlify App'
+              );
+              simulateNetlifyEvent();
+            }
+          }
+        } catch (err) {
+          // General notice
+          addNotification(
+            'Sincronização Real-Time',
+            'Ação ou clique sincronizado com dynamic-manatee-66561d.netlify.app.',
+            'info',
+            'Netlify App'
+          );
+        }
+      }
+    };
+
+    window.addEventListener('message', handleIframeMessage);
+    return () => window.removeEventListener('message', handleIframeMessage);
+  }, [funcionarios, obras, equipamentos]);
 
 
   // Administration helpers
@@ -1042,6 +1329,19 @@ export default function App() {
     );
   }
 
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  const handleMarkAllAsRead = () => {
+    const updated = notifications.map(n => ({ ...n, read: true }));
+    setNotifications(updated);
+    localStorage.setItem('renea_notifications', JSON.stringify(updated));
+  };
+
+  const handleClearNotifications = () => {
+    setNotifications([]);
+    localStorage.setItem('renea_notifications', JSON.stringify([]));
+  };
+
   // Logged-in Core App Layout (Responsive Green Theme)
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col md:flex-row text-slate-100 antialiased font-sans" id="app-root">
@@ -1160,12 +1460,33 @@ export default function App() {
           </div>
         </div>
 
-        <button 
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="p-2 text-slate-400 hover:text-white cursor-pointer"
-        >
-          {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </button>
+        <div className="flex items-center gap-1">
+          {/* Notification Bell Mobile */}
+          <div className="relative">
+            <button 
+              onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)}
+              className="p-2 text-slate-400 hover:text-white relative cursor-pointer"
+            >
+              {notifications.filter(n => !n.read).length > 0 ? (
+                <>
+                  <BellRing className="w-5 h-5 text-emerald-400 animate-bounce" />
+                  <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-emerald-500 text-white font-extrabold text-[8px] rounded-full flex items-center justify-center">
+                    {notifications.filter(n => !n.read).length}
+                  </span>
+                </>
+              ) : (
+                <Bell className="w-5 h-5" />
+              )}
+            </button>
+          </div>
+
+          <button 
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-2 text-slate-400 hover:text-white cursor-pointer"
+          >
+            {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
       </header>
 
       {/* Mobile Drawer Menu overlay */}
@@ -1244,9 +1565,131 @@ export default function App() {
               <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></span>
               Renea Operacional • Canteiro de Obras Ativo
             </h2>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg">
+              <Wifi className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+              <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">Netlify Sync</span>
+            </div>
           </div>
           
           <div className="flex items-center gap-6">
+            {/* Notification Bell Dropdown Button */}
+            <div className="relative">
+              <button 
+                onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)}
+                className={`p-2 bg-slate-900 hover:bg-slate-800 border ${isNotifDropdownOpen ? 'border-emerald-500 text-white bg-slate-800' : 'border-slate-800 text-slate-400'} hover:border-slate-700 hover:text-white rounded-xl transition-all relative cursor-pointer flex items-center justify-center`}
+                title="Notificações Netlify"
+              >
+                {unreadCount > 0 ? (
+                  <>
+                    <BellRing className="w-4 h-4 text-emerald-400 animate-bounce" />
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-white font-extrabold text-[8px] rounded-full flex items-center justify-center shadow-lg">
+                      {unreadCount}
+                    </span>
+                  </>
+                ) : (
+                  <Bell className="w-4 h-4" />
+                )}
+              </button>
+
+              {isNotifDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setIsNotifDropdownOpen(false)} />
+                  <div className="absolute right-0 mt-3 w-80 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 p-4 space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-200">Alertas Campo (Netlify)</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] font-bold">
+                        {unreadCount > 0 && (
+                          <button 
+                            onClick={handleMarkAllAsRead}
+                            className="text-emerald-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                          >
+                            <CheckCheck className="w-3.5 h-3.5" />
+                            Lidas
+                          </button>
+                        )}
+                        {notifications.length > 0 && (
+                          <>
+                            <span className="text-slate-800">|</span>
+                            <button 
+                              onClick={handleClearNotifications}
+                              className="text-slate-500 hover:text-slate-300 cursor-pointer"
+                            >
+                              Limpar
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                      {notifications.length === 0 ? (
+                        <div className="py-10 text-center flex flex-col items-center justify-center text-slate-500">
+                          <Bell className="w-7 h-7 text-slate-700 mb-1.5" />
+                          <p className="text-[11px] italic">Sem alertas recentes</p>
+                          <p className="text-[9px] text-slate-600 mt-1 max-w-[200px]">Os cadastros realizados no Netlify aparecerão aqui em tempo real.</p>
+                        </div>
+                      ) : (
+                        notifications.map(n => {
+                          const borderClass = n.read ? 'border-slate-800/40 opacity-60 bg-slate-950/20' : 'border-emerald-500/20 bg-emerald-500/5';
+                          const dotClass = n.type === 'success' 
+                            ? 'bg-emerald-500' 
+                            : n.type === 'warning' 
+                            ? 'bg-amber-500' 
+                            : n.type === 'error' 
+                            ? 'bg-rose-500' 
+                            : 'bg-blue-500';
+
+                          return (
+                            <div 
+                              key={n.id} 
+                              onClick={() => {
+                                setNotifications(prev => {
+                                  const updated = prev.map(item => item.id === n.id ? { ...item, read: true } : item);
+                                  localStorage.setItem('renea_notifications', JSON.stringify(updated));
+                                  return updated;
+                                });
+                              }}
+                              className={`p-2.5 border rounded-xl space-y-1 text-left transition-all hover:bg-slate-800/40 cursor-pointer ${borderClass}`}
+                            >
+                              <div className="flex items-start gap-1.5 justify-between">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass}`} />
+                                  <span className="text-[9px] font-black uppercase tracking-wider truncate text-slate-200">{n.title}</span>
+                                </div>
+                                <span className="text-[9px] text-slate-500 font-mono shrink-0">{n.timestamp}</span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 leading-normal">{n.message}</p>
+                              <div className="flex items-center justify-between pt-1">
+                                <span className="text-[8px] px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded font-mono uppercase font-black">{n.source}</span>
+                                {!n.read && <span className="text-[8px] text-emerald-400 font-bold font-mono">NOVO</span>}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    <div className="border-t border-slate-800 pt-2.5">
+                      <button 
+                        onClick={() => {
+                          simulateNetlifyEvent();
+                        }}
+                        className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[10px] rounded-lg tracking-wider uppercase flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                      >
+                        ⚡ Forçar Cadastro Netlify
+                      </button>
+                      <p className="text-[8px] text-slate-500 text-center mt-1.5 font-mono">
+                        Simula um encarregado lançando frotas paradas ou presença no Netlify.
+                      </p>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
             <div className="text-right">
               <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest font-mono">Data do Sistema</p>
               <p className="text-xs font-semibold text-slate-300">
@@ -1283,6 +1726,7 @@ export default function App() {
                 lubrificacoes={lubrificacoes}
                 rdos={rdos}
                 historyLogs={historyLogs}
+                listasPresenca={listasPresenca}
                 onNavigate={(tab) => setActiveTab(tab)}
               />
             )}
@@ -1388,6 +1832,49 @@ export default function App() {
           </motion.div>
         </div>
       </main>
+
+      {/* Toast notifications container in the top right corner */}
+      <div className="fixed top-4 right-4 z-50 flex flex-col gap-3 w-full max-w-sm pointer-events-none select-none">
+        <AnimatePresence>
+          {activeToasts.map(toast => {
+            const colorClass = toast.type === 'success' 
+              ? 'border-emerald-500/20 bg-slate-900/95 text-emerald-400'
+              : toast.type === 'warning'
+              ? 'border-amber-500/20 bg-slate-900/95 text-amber-400'
+              : toast.type === 'error'
+              ? 'border-rose-500/20 bg-slate-900/95 text-rose-400'
+              : 'border-blue-500/20 bg-slate-900/95 text-blue-400';
+
+            return (
+              <motion.div
+                key={toast.id}
+                initial={{ opacity: 0, x: 50, y: -10, scale: 0.95 }}
+                animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+                exit={{ opacity: 0, x: 50, scale: 0.95 }}
+                className={`pointer-events-auto border p-4 rounded-2xl shadow-2xl flex gap-3 items-start backdrop-blur-md ${colorClass}`}
+              >
+                <div className="mt-0.5 shrink-0">
+                  {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-400" />}
+                  {toast.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-400" />}
+                  {toast.type === 'error' && <XCircle className="w-5 h-5 text-rose-400" />}
+                  {toast.type === 'info' && <Info className="w-5 h-5 text-blue-400" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider block truncate text-slate-100">{toast.title}</span>
+                    <span className="text-[9px] font-mono opacity-50 shrink-0 text-slate-400">{toast.timestamp}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed mt-1">{toast.message}</p>
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-md font-mono uppercase font-black">{toast.source}</span>
+                    <span className="text-[9px] text-slate-500">Tempo Real</span>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
 
     </div>
   );

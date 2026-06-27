@@ -34,6 +34,10 @@ import {
   AlertTriangle 
 } from 'lucide-react';
 
+import reneaLogoFull from '../assets/images/renea_logo_1782558137669.jpg';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
+
 interface RelatoriosTabProps {
   empresas: Empresa[];
   obras: ObraLocal[];
@@ -263,133 +267,506 @@ export default function RelatoriosTab({
 
   const results = getFilteredData();
 
-  // Excel / CSV Export Builder with perfect Portuguese accents support (BOM)
-  const handleExportCSV = () => {
-    let headers: string[] = [];
-    let rows: string[][] = [];
-    const filename = `Renea_Relatorio_${reportType}_${dataInicio}_a_${dataFim}.csv`;
+  const [isExporting, setIsExporting] = useState(false);
 
-    if (reportType === 'consumo_frota') {
-      headers = ['Prefixo', 'Equipamento', 'Marca', 'Modelo', 'Proprietário', 'Total Abastecimentos', 'Volume Total (Litros)'];
-      rows = (results as any[]).map(r => [
-        r.eq.prefixo,
-        r.eq.nome,
-        r.eq.marca,
-        r.eq.modelo,
-        r.company,
-        r.count.toString(),
-        r.liters.toString()
-      ]);
-    } else if (reportType === 'consumo_empresa') {
-      headers = ['Empresa Proprietária', 'Volume Abastecido (Litros)', 'Quantidade Lançamentos'];
-      rows = (results as any[]).map(r => [
-        r.companyName,
-        r.liters.toString(),
-        r.countAbas.toString()
-      ]);
-    } else if (reportType === 'consumo_periodo') {
-      headers = ['Data', 'Hora', 'Frota', 'Equipamento', 'Proprietário', 'Combustível', 'Volume (L)', 'Bomba Inicial', 'Bomba Final', 'Responsável', 'Obs'];
-      rows = (results as any[]).map(r => {
-        const eq = equipamentos.find(e => e.id === r.equipamentoId);
-        const emp = eq ? empresas.find(em => em.id === eq.empresaId)?.nome : '—';
-        const comb = combustiveis.find(t => t.id === r.tipoCombustivelId)?.nome || '—';
-        return [
-          r.data.split('-').reverse().join('/'),
-          r.hora,
-          eq ? eq.prefixo : '—',
-          eq ? eq.nome : '—',
-          emp || '—',
-          comb,
-          r.quantidadeLitros.toString(),
-          r.bombaInicial.toString(),
-          r.bombaFinal.toString(),
-          r.responsavel,
-          r.observacao
-        ];
+  // Helper to convert dynamic asset image URL to Base64
+  const getBase64ImageFromUrl = async (imageUrl: string): Promise<string> => {
+    try {
+      const res = await fetch(imageUrl);
+      const blob = await res.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("Erro ao converter blob para Base64"));
+        reader.readAsDataURL(blob);
       });
-    } else if (reportType === 'lubrificacao_frota') {
-      headers = ['Data', 'Hora', 'Frota', 'Equipamento', 'Lubrificante', 'Compartimento', 'Qtd (L/kg)', 'Horímetro', 'Técnico', 'Obs'];
-      rows = (results as any[]).map(r => {
-        const eq = equipamentos.find(e => e.id === r.equipamentoId);
-        const prod = lubrificantes.find(p => p.id === r.produtoLubrificacaoId)?.nome || '—';
-        return [
-          r.data.split('-').reverse().join('/'),
-          r.hora,
-          eq ? eq.prefixo : '—',
-          eq ? eq.nome : '—',
-          prod,
-          r.compartimento,
-          r.quantidade.toString(),
-          r.horimetro.toString(),
-          r.responsavel,
-          r.observacao
-        ];
-      });
-    } else if (reportType === 'rdo_data') {
-      headers = ['Data', 'Canteiro Obra', 'Empresa Executor', 'Etapa Trabalho', 'Serviço Concluído', 'Equipe Headcount', 'Status da Atividade', 'Pendências'];
-      rows = (results as any[]).map(r => {
-        const ob = obras.find(o => o.id === r.obraLocalId)?.nome || '—';
-        const emp = empresas.find(e => e.id === r.empresaId)?.nome || '—';
-        const et = etapas.find(e => e.id === r.etapaServicoId)?.nome || '—';
-        return [
-          r.data.split('-').reverse().join('/'),
-          ob,
-          emp,
-          et,
-          r.servicoExecutado,
-          r.quantidadeEquipe.toString(),
-          r.statusAtividade,
-          r.pendencias || 'Nenhuma'
-        ];
-      });
-    } else if (reportType === 'equipamentos_mobilizados' || reportType === 'equipamentos_manutencao') {
-      headers = ['Prefixo', 'Equipamento', 'Marca', 'Modelo', 'Número Placa', 'Proprietário', 'Canteiro Alocado', 'Status Atual'];
-      rows = (results as any[]).map(eq => {
-        const emp = empresas.find(e => e.id === eq.empresaId)?.nome || '—';
-        const site = obras.find(o => o.id === eq.localAtualId)?.nome || '—';
-        return [
-          eq.prefixo,
-          eq.nome,
-          eq.marca,
-          eq.modelo,
-          eq.seriePlaca || '—',
-          emp,
-          site,
-          eq.status
-        ];
-      });
-    } else if (reportType === 'resumo_obra') {
-      headers = ['Canteiro de Obra', 'Frentes de Trabalho Lançadas', 'Média de Trabalhadores Ativos', 'Localização / Endereço'];
-      rows = (results as any[]).map(r => [
-        r.site.nome,
-        r.rdoCount.toString(),
-        r.averageWorkers.toString(),
-        r.site.endereco
-      ]);
+    } catch (error) {
+      console.error("Erro ao carregar imagem para conversão Base64:", error);
+      throw error;
     }
-
-    // Build perfect standard CSV format
-    // Use semicolon separator (preferred by European/South American Excel locales)
-    const delimiter = ';';
-    const csvContent = [
-      headers.join(delimiter),
-      ...rows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(delimiter))
-    ].join('\n');
-
-    // Add \uFEFF Byte Order Mark (BOM) for perfect Excel UTF-8 import!
-    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
-  // Browser print wrapper
-  const handlePrint = () => {
-    window.print();
+  const handleExportPDF = async () => {
+    setIsExporting(true);
+    try {
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      // Try to load the Renea logo
+      let logoBase64 = '';
+      try {
+        logoBase64 = await getBase64ImageFromUrl(reneaLogoFull);
+      } catch (e) {
+        console.warn("Could not load logo as base64, using fallback text logo.", e);
+      }
+
+      // Define table content based on reportType
+      let tableHeaders: string[] = [];
+      let tableRows: string[][] = [];
+      let reportTitle = '';
+      let reportDescription = '';
+
+      if (reportType === 'consumo_frota') {
+        reportTitle = 'Consumo Acumulado de Combustível por Frota';
+        reportDescription = `Ranking de consumo total (litros) por equipamento no período de ${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')}.`;
+        tableHeaders = ['Prefixo', 'Equipamento', 'Marca', 'Modelo', 'Proprietário', 'Abastecimentos', 'Volume (Litros)'];
+        tableRows = (results as any[]).map(r => [
+          r.eq.prefixo,
+          r.eq.nome,
+          r.eq.marca,
+          r.eq.modelo,
+          r.company,
+          r.count.toString(),
+          `${r.liters.toLocaleString('pt-BR')} L`
+        ]);
+      } else if (reportType === 'consumo_empresa') {
+        reportTitle = 'Consumo de Combustível por Empresa';
+        reportDescription = `Divisão do volume abastecido (litros) por empresa proprietária no período de ${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')}.`;
+        tableHeaders = ['Empresa Proprietária', 'Volume Abastecido', 'Lançamentos'];
+        tableRows = (results as any[]).map(r => [
+          r.companyName,
+          `${r.liters.toLocaleString('pt-BR')} L`,
+          r.countAbas.toString()
+        ]);
+      } else if (reportType === 'consumo_periodo') {
+        reportTitle = 'Extrato Analítico de Abastecimentos por Período';
+        reportDescription = `Histórico detalhado de todos os abastecimentos realizados de ${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')}.`;
+        tableHeaders = ['Data', 'Hora', 'Frota', 'Equipamento', 'Proprietário', 'Combustível', 'Volume', 'Inicial', 'Final', 'Responsável'];
+        tableRows = (results as any[]).map(r => {
+          const eq = equipamentos.find(e => e.id === r.equipamentoId);
+          const emp = eq ? empresas.find(em => em.id === eq.empresaId)?.nome : '—';
+          const comb = combustiveis.find(t => t.id === r.tipoCombustivelId)?.nome || '—';
+          return [
+            r.data.split('-').reverse().join('/'),
+            r.hora,
+            eq ? eq.prefixo : '—',
+            eq ? eq.nome : '—',
+            emp || '—',
+            comb,
+            `${r.quantidadeLitros} L`,
+            r.bombaInicial.toString(),
+            r.bombaFinal.toString(),
+            r.responsavel
+          ];
+        });
+      } else if (reportType === 'lubrificacao_frota') {
+        reportTitle = 'Relatório de Lubrificações da Frota';
+        reportDescription = `Histórico de trocas de óleos, graxas e lubrificantes de ${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')}.`;
+        tableHeaders = ['Data', 'Hora', 'Frota', 'Equipamento', 'Lubrificante', 'Compartimento', 'Qtd (L/kg)', 'Horímetro', 'Técnico'];
+        tableRows = (results as any[]).map(r => {
+          const eq = equipamentos.find(e => e.id === r.equipamentoId);
+          const prod = lubrificantes.find(p => p.id === r.produtoLubrificacaoId)?.nome || '—';
+          return [
+            r.data.split('-').reverse().join('/'),
+            r.hora,
+            eq ? eq.prefixo : '—',
+            eq ? eq.nome : '—',
+            prod,
+            r.compartimento,
+            r.quantidade.toString(),
+            r.horimetro.toString(),
+            r.responsavel
+          ];
+        });
+      } else if (reportType === 'rdo_data') {
+        reportTitle = 'Extrato de RDOs Diários por Obra';
+        reportDescription = `Diário de Atividades Físicas e operacionais de ${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')}.`;
+        tableHeaders = ['Data', 'Canteiro Obra', 'Empresa', 'Etapa Trabalho', 'Serviço Concluído', 'Headcount', 'Status'];
+        tableRows = (results as any[]).map(r => {
+          const ob = obras.find(o => o.id === r.obraLocalId)?.nome || '—';
+          const emp = empresas.find(e => e.id === r.empresaId)?.nome || '—';
+          const et = etapas.find(e => e.id === r.etapaServicoId)?.nome || '—';
+          return [
+            r.data.split('-').reverse().join('/'),
+            ob,
+            emp,
+            et,
+            r.servicoExecutado,
+            `${r.quantidadeEquipe} pessoas`,
+            r.statusAtividade
+          ];
+        });
+      } else if (reportType === 'equipamentos_mobilizados' || reportType === 'equipamentos_manutencao') {
+        const isMaint = reportType === 'equipamentos_manutencao';
+        reportTitle = isMaint ? 'Inventário de Frota em Manutenção (Oficina)' : 'Relatório de Equipamentos Ativos e Mobilizados';
+        reportDescription = isMaint 
+          ? 'Relação de todas as máquinas e frotas sob custódia da equipe de manutenção ou oficina de campo.'
+          : 'Relação de equipamentos atualmente ativos e alocados nos canteiros de obra.';
+        tableHeaders = ['Prefixo', 'Equipamento', 'Marca', 'Modelo', 'Placa/Série', 'Proprietário', 'Canteiro Alocado', 'Status'];
+        tableRows = (results as any[]).map(eq => {
+          const emp = empresas.find(e => e.id === eq.empresaId)?.nome || '—';
+          const site = obras.find(o => o.id === eq.localAtualId)?.nome || '—';
+          return [
+            eq.prefixo,
+            eq.nome,
+            eq.marca,
+            eq.modelo,
+            eq.seriePlaca || '—',
+            emp,
+            site,
+            eq.status
+          ];
+        });
+      } else if (reportType === 'resumo_obra') {
+        reportTitle = 'Consolidado e Resumo Geral por Canteiro de Obra';
+        reportDescription = 'Relatório integrado com volume de frentes de serviço e estimativa média de headcount por canteiro.';
+        tableHeaders = ['Canteiro de Obra', 'Frentes Lançadas', 'Média Headcount', 'Localização / Endereço'];
+        tableRows = (results as any[]).map(r => [
+          r.site.nome,
+          r.rdoCount.toString(),
+          `${r.averageWorkers.toFixed(1)} pessoas`,
+          r.site.endereco
+        ]);
+      }
+
+      // Drawing header on each page
+      const drawHeaderAndFooter = (data: any) => {
+        doc.setFillColor(248, 250, 252); 
+        doc.rect(0, 0, pageWidth, 35, 'F');
+
+        doc.setFillColor(15, 81, 50); 
+        doc.rect(0, 0, pageWidth, 4, 'F');
+
+        if (logoBase64) {
+          doc.addImage(logoBase64, 'JPEG', 15, 8, 38, 18);
+        } else {
+          doc.setFont('Helvetica', 'bold');
+          doc.setFontSize(16);
+          doc.setTextColor(15, 81, 50);
+          doc.text("RENEA", 15, 18);
+          doc.setFontSize(8);
+          doc.setTextColor(120);
+          doc.text("INFRAESTRUTURA", 15, 23);
+        }
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(30, 41, 59); 
+        doc.text(reportTitle, pageWidth - 15, 14, { align: 'right' });
+
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(100);
+        const generatedAt = `Gerado em: ${new Date().toLocaleString('pt-BR')} por deivid.santana7002@gmail.com`;
+        doc.text(generatedAt, pageWidth - 15, 19, { align: 'right' });
+
+        const periodStr = `Período: ${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')}`;
+        doc.text(periodStr, pageWidth - 15, 24, { align: 'right' });
+
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.5);
+        doc.line(0, 35, pageWidth, 35);
+
+        // Footer
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(100);
+        
+        doc.setDrawColor(241, 245, 249);
+        doc.line(15, pageHeight - 15, pageWidth - 15, pageHeight - 15);
+
+        const footerText = 'Sistema Renea • Controle Integrado de Frota e Diário de Obras';
+        doc.text(footerText, 15, pageHeight - 10);
+        
+        const pageInfo = `Página ${data.pageNumber} de ${data.pageCount || 'X'}`;
+        doc.text(pageInfo, pageWidth - 15, pageHeight - 10, { align: 'right' });
+      };
+
+      doc.setFont('Helvetica', 'italic');
+      doc.setFontSize(9);
+      doc.setTextColor(71, 85, 105);
+      const splitDescription = doc.splitTextToSize(reportDescription, pageWidth - 30);
+      doc.text(splitDescription, 15, 43);
+
+      (doc as any).autoTable({
+        startY: 50,
+        head: [tableHeaders],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: {
+          fillColor: [15, 81, 50], 
+          textColor: [255, 255, 255],
+          font: 'Helvetica',
+          fontStyle: 'bold',
+          fontSize: 8.5,
+          halign: 'left',
+          valign: 'middle'
+        },
+        bodyStyles: {
+          font: 'Helvetica',
+          fontSize: 8,
+          textColor: [51, 65, 85],
+          cellPadding: 3
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252] 
+        },
+        margin: { top: 38, bottom: 20, left: 15, right: 15 },
+        didDrawPage: drawHeaderAndFooter
+      });
+
+      const totalPages = doc.internal.pages.length - 1;
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(100);
+        doc.setFillColor(255, 255, 255);
+        doc.rect(pageWidth - 35, pageHeight - 13, 20, 5, 'F');
+        doc.text(`Página ${i} de ${totalPages}`, pageWidth - 15, pageHeight - 10, { align: 'right' });
+      }
+
+      doc.save(`Renea_Relatorio_${reportType}_${dataInicio}_a_${dataFim}.pdf`);
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportExcelFormatted = async () => {
+    setIsExporting(true);
+    try {
+      let logoBase64 = '';
+      try {
+        logoBase64 = await getBase64ImageFromUrl(reneaLogoFull);
+      } catch (e) {
+        console.warn("Could not load logo as base64 for excel.", e);
+      }
+
+      const filename = `Renea_Relatorio_${reportType}_${dataInicio}_a_${dataFim}.xls`;
+
+      let headers: string[] = [];
+      let rows: string[][] = [];
+      let title = '';
+
+      if (reportType === 'consumo_frota') {
+        title = 'Consumo por Frota';
+        headers = ['Prefixo', 'Equipamento', 'Marca', 'Modelo', 'Proprietário', 'Total Abastecimentos', 'Volume Total (Litros)'];
+        rows = (results as any[]).map(r => [
+          r.eq.prefixo,
+          r.eq.nome,
+          r.eq.marca,
+          r.eq.modelo,
+          r.company,
+          r.count.toString(),
+          r.liters.toString()
+        ]);
+      } else if (reportType === 'consumo_empresa') {
+        title = 'Consumo por Empresa';
+        headers = ['Empresa Proprietária', 'Volume Abastecido (Litros)', 'Quantidade Lançamentos'];
+        rows = (results as any[]).map(r => [
+          r.companyName,
+          r.liters.toString(),
+          r.countAbas.toString()
+        ]);
+      } else if (reportType === 'consumo_periodo') {
+        title = 'Consumo por Período';
+        headers = ['Data', 'Hora', 'Frota', 'Equipamento', 'Proprietário', 'Combustível', 'Volume (L)', 'Bomba Inicial', 'Bomba Final', 'Responsável', 'Obs'];
+        rows = (results as any[]).map(r => {
+          const eq = equipamentos.find(e => e.id === r.equipamentoId);
+          const emp = eq ? empresas.find(em => em.id === eq.empresaId)?.nome : '—';
+          const comb = combustiveis.find(t => t.id === r.tipoCombustivelId)?.nome || '—';
+          return [
+            r.data.split('-').reverse().join('/'),
+            r.hora,
+            eq ? eq.prefixo : '—',
+            eq ? eq.nome : '—',
+            emp || '—',
+            comb,
+            r.quantidadeLitros.toString(),
+            r.bombaInicial.toString(),
+            r.bombaFinal.toString(),
+            r.responsavel,
+            r.observacao
+          ];
+        });
+      } else if (reportType === 'lubrificacao_frota') {
+        title = 'Lubrificações da Frota';
+        headers = ['Data', 'Hora', 'Frota', 'Equipamento', 'Lubrificante', 'Compartimento', 'Qtd (L/kg)', 'Horímetro', 'Técnico', 'Obs'];
+        rows = (results as any[]).map(r => {
+          const eq = equipamentos.find(e => e.id === r.equipamentoId);
+          const prod = lubrificantes.find(p => p.id === r.produtoLubrificacaoId)?.nome || '—';
+          return [
+            r.data.split('-').reverse().join('/'),
+            r.hora,
+            eq ? eq.prefixo : '—',
+            eq ? eq.nome : '—',
+            prod,
+            r.compartimento,
+            r.quantidade.toString(),
+            r.horimetro.toString(),
+            r.responsavel,
+            r.observacao
+          ];
+        });
+      } else if (reportType === 'rdo_data') {
+        title = 'RDO Diário por Obra';
+        headers = ['Data', 'Canteiro Obra', 'Empresa Executor', 'Etapa Trabalho', 'Serviço Concluído', 'Equipe Headcount', 'Status da Atividade', 'Pendências'];
+        rows = (results as any[]).map(r => {
+          const ob = obras.find(o => o.id === r.obraLocalId)?.nome || '—';
+          const emp = empresas.find(e => e.id === r.empresaId)?.nome || '—';
+          const et = etapas.find(e => e.id === r.etapaServicoId)?.nome || '—';
+          return [
+            r.data.split('-').reverse().join('/'),
+            ob,
+            emp,
+            et,
+            r.servicoExecutado,
+            r.quantidadeEquipe.toString(),
+            r.statusAtividade,
+            r.pendencias || 'Nenhuma'
+          ];
+        });
+      } else if (reportType === 'equipamentos_mobilizados' || reportType === 'equipamentos_manutencao') {
+        title = reportType === 'equipamentos_manutencao' ? 'Frota em Manutenção' : 'Equipamentos Ativos';
+        headers = ['Prefixo', 'Equipamento', 'Marca', 'Modelo', 'Número Placa', 'Proprietário', 'Canteiro Alocado', 'Status Atual'];
+        rows = (results as any[]).map(eq => {
+          const emp = empresas.find(e => e.id === eq.empresaId)?.nome || '—';
+          const site = obras.find(o => o.id === eq.localAtualId)?.nome || '—';
+          return [
+            eq.prefixo,
+            eq.nome,
+            eq.marca,
+            eq.modelo,
+            eq.seriePlaca || '—',
+            emp,
+            site,
+            eq.status
+          ];
+        });
+      } else if (reportType === 'resumo_obra') {
+        title = 'Resumo Geral por Obra';
+        headers = ['Canteiro de Obra', 'Frentes de Trabalho Lançadas', 'Média de Trabalhadores Ativos', 'Localização / Endereço'];
+        rows = (results as any[]).map(r => [
+          r.site.nome,
+          r.rdoCount.toString(),
+          r.averageWorkers.toString(),
+          r.site.endereco
+        ]);
+      }
+
+      const colCount = headers.length;
+
+      let htmlContent = `
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8" />
+<style>
+  table { 
+    font-family: Arial, Helvetica, sans-serif; 
+    border-collapse: collapse; 
+    width: 100%;
+  }
+  th { 
+    background-color: #0F5132 !important; 
+    color: #FFFFFF !important; 
+    font-family: Arial, Helvetica, sans-serif; 
+    font-weight: bold; 
+    font-size: 11pt;
+    padding: 8px 12px; 
+    border: 1px solid #CBD5E1; 
+    text-align: left; 
+  }
+  td { 
+    font-family: Arial, Helvetica, sans-serif; 
+    font-size: 10pt;
+    padding: 6px 12px; 
+    border: 1px solid #E2E8F0; 
+    color: #334155; 
+  }
+  tr.even { 
+    background-color: #F8FAFC; 
+  }
+  tr.odd { 
+    background-color: #FFFFFF; 
+  }
+  .title-cell {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 16pt;
+    font-weight: bold;
+    color: #0F5132;
+    padding-bottom: 4px;
+  }
+  .subtitle-cell {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 10pt;
+    color: #64748B;
+    padding-bottom: 20px;
+  }
+</style>
+<!--[if gte mso 9]>
+<xml>
+<x:ExcelWorkbook>
+<x:ExcelWorksheets>
+<x:ExcelWorksheet>
+<x:Name>Relatório Renea</x:Name>
+<x:WorksheetOptions>
+<x:AutoFilter />
+<x:DisplayGridlines />
+</x:WorksheetOptions>
+</x:ExcelWorksheet>
+</x:ExcelWorksheets>
+</x:ExcelWorkbook>
+</xml>
+<![endif]-->
+</head>
+<body>
+  <table>
+      `;
+
+      if (logoBase64) {
+        htmlContent += `
+    <tr>
+      <td colspan="${colCount}" style="border: none; padding: 10px 0;">
+        <img src="${logoBase64}" width="150" height="60" />
+      </td>
+    </tr>
+        `;
+      }
+
+      htmlContent += `
+    <tr>
+      <td colspan="${colCount}" class="title-cell" style="border: none;">
+        RENEA INFRAESTRUTURA
+      </td>
+    </tr>
+    <tr>
+      <td colspan="${colCount}" class="subtitle-cell" style="border: none;">
+        Relatório: ${title} | Período: ${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')}
+      </td>
+    </tr>
+    <thead>
+      <tr>
+        ${headers.map(h => `<th>${h}</th>`).join('')}
+      </tr>
+    </thead>
+    <tbody>
+      ${rows.map((row, idx) => `
+      <tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
+        ${row.map(cell => `<td>${cell}</td>`).join('')}
+      </tr>
+      `).join('')}
+    </tbody>
+  </table>
+</body>
+</html>
+      `;
+
+      const blob = new Blob([htmlContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Erro ao exportar Excel:", error);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -405,22 +782,22 @@ export default function RelatoriosTab({
           <p className="text-xs text-slate-400 mt-1">Gere resumos, consumo operacional de combustível por frota, empresa, lubrificações e diários RDO.</p>
         </div>
 
-        <div className="flex items-center gap-2">
+         <div className="flex items-center gap-2">
           <button
-            onClick={handleExportCSV}
-            disabled={results.length === 0}
+            onClick={handleExportExcelFormatted}
+            disabled={results.length === 0 || isExporting}
             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            Exportar Excel
+            {isExporting ? 'Processando...' : 'Exportar Excel'}
           </button>
           <button
-            onClick={handlePrint}
-            disabled={results.length === 0}
-            className="px-4 py-2 bg-slate-900 border border-slate-800 text-slate-200 hover:bg-slate-800 disabled:opacity-40 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+            onClick={handleExportPDF}
+            disabled={results.length === 0 || isExporting}
+            className="px-4 py-2 bg-slate-900 border border-slate-800 text-slate-200 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <Printer className="w-4 h-4" />
-            Imprimir PDF
+            {isExporting ? 'Processando...' : 'Gerar PDF'}
           </button>
         </div>
       </div>

@@ -16,7 +16,8 @@ import {
   Abastecimento, 
   Lubrificacao, 
   RdoDiario,
-  HistoryLog
+  HistoryLog,
+  ListaPresenca
 } from '../types';
 
 import { 
@@ -61,6 +62,7 @@ interface DashboardProps {
   lubrificacoes: Lubrificacao[];
   rdos: RdoDiario[];
   historyLogs: HistoryLog[];
+  listasPresenca?: ListaPresenca[];
   onNavigate: (tab: string) => void;
 }
 
@@ -77,6 +79,7 @@ export default function Dashboard({
   lubrificacoes,
   rdos,
   historyLogs,
+  listasPresenca = [],
   onNavigate
 }: DashboardProps) {
 
@@ -146,6 +149,43 @@ export default function Dashboard({
     name,
     value: fuelByTypeMap[name]
   }));
+
+  // New calculations for additional dashboards
+  const consumptionByObra = obras.map(site => {
+    const liters = abastecimentos.filter(ab => {
+      const eq = equipamentos.find(e => e.id === ab.equipamentoId);
+      return eq && eq.localAtualId === site.id;
+    }).reduce((acc, curr) => acc + curr.quantidadeLitros, 0);
+
+    return {
+      nome: site.nome,
+      litros: liters
+    };
+  }).filter(item => item.litros > 0);
+
+  const statusCounts = [
+    { name: 'Ativo / Mobilizado', value: activeEquipments, color: '#10b981' },
+    { name: 'Parado', value: stoppedEquipments, color: '#f43f5e' },
+    { name: 'Em Manutenção', value: maintenanceEquipments, color: '#f59e0b' }
+  ].filter(item => item.value > 0);
+
+  const headcountByObra = obras.map(site => {
+    const siteLists = listasPresenca.filter(p => p.obraId === site.id);
+    let presentCount = 0;
+    if (siteLists.length > 0) {
+      const latest = [...siteLists].sort((a, b) => b.data.localeCompare(a.data))[0];
+      presentCount = latest.funcionarios.filter(f => f.presente).length;
+    } else {
+      const siteRdos = rdos.filter(r => r.obraLocalId === site.id);
+      if (siteRdos.length > 0) {
+        presentCount = Math.round(siteRdos.reduce((acc, curr) => acc + curr.quantidadeEquipe, 0) / siteRdos.length);
+      }
+    }
+    return {
+      nome: site.nome,
+      presencas: presentCount
+    };
+  }).filter(item => item.presencas > 0);
 
   // Recharts colors for fuel types (shades of green and dark gray)
   const PIE_COLORS = ['#10b981', '#34d399', '#059669', '#047857', '#6ee7b7'];
@@ -380,6 +420,117 @@ export default function Dashboard({
           </div>
         </div>
 
+      </div>
+
+      {/* 3b. Worksite Performance & Resources Dashboards */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="worksite-analytics-row">
+        {/* Chart 1: Consumption by Worksite */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <div className="mb-4">
+            <h2 className="text-xs uppercase tracking-widest font-black text-slate-400 font-mono">Consumo por Canteiro (L)</h2>
+            <p className="text-[10px] text-slate-500 mt-0.5">Litragem de abastecimento acumulada por obra ou frente de serviço.</p>
+          </div>
+          <div className="h-56 w-full">
+            {consumptionByObra.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-xs text-slate-500 italic">
+                Nenhum abastecimento registrado nos canteiros ativos.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={consumptionByObra} layout="vertical" margin={{ top: 5, right: 15, left: -10, bottom: 5 }}>
+                  <XAxis type="number" stroke="#475569" fontSize={9} tickLine={false} />
+                  <YAxis dataKey="nome" type="category" stroke="#475569" fontSize={9} tickLine={false} width={80} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }}
+                    itemStyle={{ color: '#10b981', fontSize: '11px' }}
+                  />
+                  <Bar dataKey="litros" fill="#059669" radius={[0, 4, 4, 0]}>
+                    {consumptionByObra.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#10b981' : '#047857'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* Chart 2: Fleet Status Availability */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
+          <div>
+            <h2 className="text-xs uppercase tracking-widest font-black text-slate-400 font-mono">Status da Frota</h2>
+            <p className="text-[10px] text-slate-500 mt-0.5">Distribuição operacional em tempo real de todos os equipamentos.</p>
+          </div>
+          <div className="h-40 w-full flex items-center justify-center">
+            {statusCounts.length === 0 ? (
+              <div className="text-xs text-slate-500 italic">Sem equipamentos cadastrados.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={statusCounts}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={45}
+                    outerRadius={65}
+                    paddingAngle={4}
+                    dataKey="value"
+                  >
+                    {statusCounts.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }}
+                    itemStyle={{ color: '#fff', fontSize: '11px' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+          <div className="space-y-1 mt-2 border-t border-slate-800/60 pt-2">
+            {statusCounts.map((item) => (
+              <div key={item.name} className="flex items-center justify-between text-xxs font-semibold">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }}></span>
+                  <span className="text-slate-400">{item.name}</span>
+                </div>
+                <span className="text-white font-mono">{item.value} {item.value === 1 ? 'maquina' : 'máquinas'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Chart 3: Active Presence by Worksite */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <div className="mb-4">
+            <h2 className="text-xs uppercase tracking-widest font-black text-slate-400 font-mono">Efetivo de Mão de Obra</h2>
+            <p className="text-[10px] text-slate-500 mt-0.5">Número de funcionários ativos em campo por canteiro de obras.</p>
+          </div>
+          <div className="h-56 w-full">
+            {headcountByObra.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-xs text-slate-500 italic">
+                Nenhum registro de equipe ativa ou presença encontrado.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={headcountByObra} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                  <XAxis dataKey="nome" stroke="#475569" fontSize={9} tickLine={false} />
+                  <YAxis stroke="#475569" fontSize={9} tickLine={false} axisLine={false} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }}
+                    itemStyle={{ color: '#34d399', fontSize: '11px' }}
+                  />
+                  <Bar dataKey="presencas" fill="#34d399" radius={[4, 4, 0, 0]}>
+                    {headcountByObra.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#34d399' : '#059669'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* 4. Rankings & Pending Alerts Row */}

@@ -132,3 +132,13 @@ export interface ListaPresenca {
   funcionarios: PresencaItem[];
   observacoes?: string;
 }
+
+export interface AppNotification {
+  id: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  title: string;
+  message: string;
+  timestamp: string; // HH:MM
+  read: boolean;
+  source: 'Netlify App' | 'Sistema Local' | 'Firebase Cloud';
+}
