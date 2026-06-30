@@ -38,7 +38,8 @@ import {
 import reneaLogoFull from '../assets/images/renea_logo_1782558137669.jpg';
 import spmarLogo from '../assets/images/spmar_logo.png';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
+import ExcelJS from 'exceljs';
 
 interface RelatoriosTabProps {
   empresas: Empresa[];
@@ -573,7 +574,7 @@ export default function RelatoriosTab({
       const splitDescription = doc.splitTextToSize(reportDescription, pageWidth - 30);
       doc.text(splitDescription, 15, 43);
 
-      (doc as any).autoTable({
+      autoTable(doc, {
         startY: 50,
         head: [tableHeaders],
         body: tableRows,
@@ -787,165 +788,142 @@ export default function RelatoriosTab({
         if (lower.includes('volume') || lower.includes('bomba') || lower.includes('quantidade') || lower.includes('total')) return 105;
         return 130;
       };
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'Sistema RENEA';
+      wb.created = new Date();
 
-      const colgroup = headers.map(h => `<col style="width:${colWidth(h)}px;" />`).join('');
+      const ws = wb.addWorksheet(title.substring(0, 31), {
+        views: [{ state: 'frozen', ySplit: headerRowNumber }],
+        pageSetup: { fitToPage: true, fitToWidth: 1, fitToHeight: 0, orientation: 'landscape' }
+      });
 
-      const htmlContent = `
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-<meta charset="utf-8" />
-<style>
-  body {
-    margin: 0;
-    background: #FFFFFF;
-  }
-  table {
-    font-family: Arial, Helvetica, sans-serif;
-    border-collapse: collapse;
-    table-layout: fixed;
-    width: 100%;
-    mso-table-lspace: 0pt;
-    mso-table-rspace: 0pt;
-  }
-  th {
-    background-color: #D9D9D9 !important;
-    color: #000000 !important;
-    font-family: Arial, Helvetica, sans-serif;
-    font-weight: bold;
-    font-size: 10pt;
-    padding: 6px 8px;
-    border: 1px solid #000000;
-    text-align: left;
-    vertical-align: middle;
-    white-space: normal;
-    mso-wrap-style: square;
-  }
-  td {
-    background-color: #FFFFFF;
-    color: #000000;
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: 10pt;
-    padding: 5px 8px;
-    border: 1px solid #000000;
-    text-align: left;
-    vertical-align: top;
-    white-space: normal;
-    mso-wrap-style: square;
-  }
-  .logo-cell {
-    border: none;
-    padding: 6px 0 4px 0;
-    background: #FFFFFF;
-  }
-  .title-cell {
-    border: none;
-    background: #FFFFFF;
-    color: #000000;
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: ${titleFontSize};
-    font-weight: bold;
-    padding: 4px 0 2px 0;
-  }
-  .subtitle-cell {
-    border: none;
-    background: #FFFFFF;
-    color: #000000;
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: 10pt;
-    padding: 2px 0 10px 0;
-  }
-  .empty-row td {
-    border: 1px solid #000000;
-    height: 22px;
-  }
-  .totals-row td {
-    background-color: #F2F2F2 !important;
-    font-weight: bold;
-    color: #0F5132 !important;
-  }
-  .header-grid {
-    width: 100%;
-    border: none;
-  }
-  .header-grid td {
-    border: none;
-    background: #FFFFFF;
-  }
-</style>
-<!--[if gte mso 9]>
-<xml>
-<x:ExcelWorkbook>
-<x:ExcelWorksheets>
-<x:ExcelWorksheet>
-<x:Name>${escapeHtml(title).substring(0, 31)}</x:Name>
-<x:WorksheetOptions>
-<x:FreezePanes />
-<x:FrozenNoSplit />
-<x:SplitHorizontal>${headerRowNumber}</x:SplitHorizontal>
-<x:TopRowBottomPane>${headerRowNumber + 1}</x:TopRowBottomPane>
-<x:ActivePane>2</x:ActivePane>
-<x:DisplayGridlines />
-<x:FitToPage />
-<x:Print>
-<x:FitWidth>1</x:FitWidth>
-<x:FitHeight>0</x:FitHeight>
-</x:Print>
-<x:AutoFilter x:Range="R${headerRowNumber}C1:R${autoFilterEndRow}C${colCount}" />
-</x:WorksheetOptions>
-</x:ExcelWorksheet>
-</x:ExcelWorksheets>
-</x:ExcelWorkbook>
-</xml>
-<![endif]-->
-</head>
-<body>
-  <table>
-    <colgroup>${colgroup}</colgroup>
-    <tr>
-      <td colspan="${colCount}" class="logo-cell">
-        <table class="header-grid"><tr>
-          <td style="width:25%; text-align:left; vertical-align:middle;">${logoBase64 ? `<img src="${logoBase64}" width="130" height="52" />` : '<b>RENEA</b>'}</td>
-          <td style="width:50%; text-align:center; vertical-align:middle; font-size:${titleFontSize}; font-weight:bold; color:#000000;">${escapeHtml(title.toUpperCase())}</td>
-          <td style="width:25%; text-align:right; vertical-align:middle;">${spmarLogoBase64Excel ? `<img src="${spmarLogoBase64Excel}" width="120" height="26" />` : ''}</td>
-        </tr></table>
-      </td>
-    </tr>
-    <tr>
-      <td colspan="${colCount}" class="subtitle-cell" style="text-align:center;">Período: ${escapeHtml(periodo)} • Gerado em ${escapeHtml(new Date().toLocaleString('pt-BR'))}</td>
-    </tr>
-    <thead>
-      <tr>
-        ${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}
-      </tr>
-    </thead>
-    <tbody>
-      ${totalsRow ? `
-      <tr class="totals-row">
-        ${totalsRow.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}
-      </tr>` : ''}
-      ${rows.length > 0 ? rows.map(row => `
-      <tr>
-        ${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}
-      </tr>`).join('') : `
-      <tr class="empty-row">
-        <td colspan="${colCount}">Nenhum registro encontrado para os filtros selecionados.</td>
-      </tr>`}
-    </tbody>
-  </table>
-</body>
-</html>`;
+      // Larguras de coluna (convertendo px aproximado para unidade de caractere do Excel)
+      ws.columns = headers.map(h => ({ width: Math.max(10, Math.round(colWidth(h) / 7)) }));
 
-      const blob = new Blob([htmlContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      // Linha 1: logos + título central + logo parceiro (em células de texto; logos como imagem flutuante)
+      ws.mergeCells(1, 1, 1, colCount);
+      const titleCell = ws.getCell(1, 1);
+      titleCell.value = title.toUpperCase();
+      titleCell.font = { name: 'Arial', bold: true, size: isResumo ? 16 : 14, color: { argb: 'FF1E293B' } };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      ws.getRow(1).height = 34;
+
+      // Linha 2: período / gerado em
+      ws.mergeCells(2, 1, 2, colCount);
+      const subtitleCell = ws.getCell(2, 1);
+      subtitleCell.value = `Período: ${periodo} • Gerado em ${new Date().toLocaleString('pt-BR')}`;
+      subtitleCell.font = { name: 'Arial', size: 10, color: { argb: 'FF000000' } };
+      subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      ws.getRow(2).height = 18;
+
+      // Linha 3: cabeçalho da tabela
+      const headerRow = ws.getRow(headerRowNumber);
+      headers.forEach((h, idx) => {
+        const cell = headerRow.getCell(idx + 1);
+        cell.value = h;
+        cell.font = { name: 'Arial', bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F5132' } };
+        cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FF000000' } },
+          left: { style: 'thin', color: { argb: 'FF000000' } },
+          bottom: { style: 'thin', color: { argb: 'FF000000' } },
+          right: { style: 'thin', color: { argb: 'FF000000' } }
+        };
+      });
+      headerRow.height = 24;
+
+      // Linha de totais (se houver)
+      let currentRowNum = headerRowNumber + 1;
+      if (totalsRow) {
+        const tRow = ws.getRow(currentRowNum);
+        totalsRow.forEach((val, idx) => {
+          const cell = tRow.getCell(idx + 1);
+          cell.value = val;
+          cell.font = { name: 'Arial', bold: true, size: 10, color: { argb: 'FF0F5132' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FF000000' } },
+            left: { style: 'thin', color: { argb: 'FF000000' } },
+            bottom: { style: 'thin', color: { argb: 'FF000000' } },
+            right: { style: 'thin', color: { argb: 'FF000000' } }
+          };
+        });
+        currentRowNum++;
+      }
+
+      // Linhas de dados
+      if (rows.length === 0) {
+        ws.mergeCells(currentRowNum, 1, currentRowNum, colCount);
+        const emptyCell = ws.getCell(currentRowNum, 1);
+        emptyCell.value = 'Nenhum registro encontrado para os filtros selecionados.';
+        emptyCell.font = { name: 'Arial', italic: true, size: 10, color: { argb: 'FF64748B' } };
+        emptyCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        ws.getRow(currentRowNum).height = 22;
+        currentRowNum++;
+      } else {
+        rows.forEach(row => {
+          const dataRow = ws.getRow(currentRowNum);
+          row.forEach((val, idx) => {
+            const cell = dataRow.getCell(idx + 1);
+            cell.value = val;
+            cell.font = { name: 'Arial', size: 10, color: { argb: 'FF000000' } };
+            cell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
+            cell.border = {
+              top: { style: 'thin', color: { argb: 'FF000000' } },
+              left: { style: 'thin', color: { argb: 'FF000000' } },
+              bottom: { style: 'thin', color: { argb: 'FF000000' } },
+              right: { style: 'thin', color: { argb: 'FF000000' } }
+            };
+          });
+          currentRowNum++;
+        });
+      }
+
+      // Autofiltro na faixa do cabeçalho até a última linha de dados
+      const lastDataRow = Math.max(currentRowNum - 1, headerRowNumber);
+      ws.autoFilter = {
+        from: { row: headerRowNumber, column: 1 },
+        to: { row: lastDataRow, column: colCount }
+      };
+
+      // Logos como objetos de imagem nativos do Excel (resolve o erro de "imagem vinculada quebrada"
+      // que ocorria no formato HTML/MHTML antigo, pois agora o arquivo é um .xlsx binário real)
+      // ExcelJS espera a string base64 "pura" (sem o prefixo data:image/...;base64,)
+      const stripDataUrlPrefix = (dataUrl: string) => dataUrl.replace(/^data:image\/\w+;base64,/, '');
+
+      try {
+        if (logoBase64) {
+          const logoId = wb.addImage({ base64: stripDataUrlPrefix(logoBase64), extension: 'jpeg' });
+          ws.addImage(logoId, {
+            tl: { col: 0.1, row: 0.1 },
+            ext: { width: 130, height: 52 }
+          });
+        }
+        if (spmarLogoBase64Excel) {
+          const spmarId = wb.addImage({ base64: stripDataUrlPrefix(spmarLogoBase64Excel), extension: 'png' });
+          ws.addImage(spmarId, {
+            tl: { col: colCount - 1.6, row: 0.1 },
+            ext: { width: 120, height: 26 }
+          });
+        }
+      } catch (imgError) {
+        console.warn('Não foi possível inserir as logos na planilha. O relatório será exportado sem elas.', imgError);
+      }
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', filename);
+      link.setAttribute('download', filename.replace(/\.xls$/, '.xlsx'));
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Erro ao exportar Excel:", error);
+      alert('Não foi possível gerar o arquivo Excel. Tente novamente ou contate o suporte.');
     } finally {
       setIsExporting(false);
     }
