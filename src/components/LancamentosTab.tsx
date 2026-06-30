@@ -125,6 +125,18 @@ export default function LancamentosTab({
   const derivedEquipmentDesc = selectedEquipment ? `${selectedEquipment.marca} ${selectedEquipment.modelo}` : '';
   const derivedCompany = selectedEquipment ? empresas.find(em => em.id === selectedEquipment.empresaId)?.nome : '';
 
+  // Encontra a leitura "Bomba Final" mais recente já registrada para um comboio,
+  // ordenando do menor para o maior valor de bomba (a maior leitura = a mais recente).
+  // Essa leitura vira automaticamente a "Bomba Inicial" do próximo abastecimento daquele comboio.
+  const getUltimaBombaFinal = (comboioIdAlvo: string, excluirId: string | null = null): number => {
+    const registrosDoComboio = abastecimentos
+      .filter(ab => ab.comboioId === comboioIdAlvo && ab.id !== excluirId)
+      .sort((a, b) => a.bombaFinal - b.bombaFinal);
+
+    if (registrosDoComboio.length === 0) return 1000; // valor inicial padrão quando o comboio ainda não tem histórico
+    return registrosDoComboio[registrosDoComboio.length - 1].bombaFinal;
+  };
+
   // Reset fields helper
   const resetFormFields = () => {
     setEditingId(null);
@@ -137,10 +149,11 @@ export default function LancamentosTab({
 
     setHorimetroInicial(0);
     setKmInicial(0);
-    setBombaInicial(1000);
+    const comboioPadrao = comboios[0]?.id || '';
+    setBombaInicial(comboioPadrao ? getUltimaBombaFinal(comboioPadrao) : 1000);
     setQuantidadeLitros(100);
     setTipoCombustivelId(combustiveis[0]?.id || '');
-    setComboioId(comboios[0]?.id || '');
+    setComboioId(comboioPadrao);
 
     setLubHorimetro(0);
     setProdutoLubrificacaoId(lubrificantes[0]?.id || '');
@@ -194,6 +207,16 @@ export default function LancamentosTab({
       setPendencias(x.pendencias); setProximasEtapas(x.proximasEtapas);
     }
     setIsFormOpen(true);
+  };
+
+  // Quando o usuário troca o comboio no formulário, a Bomba Inicial é recalculada
+  // automaticamente com base na última Bomba Final registrada para aquele comboio
+  // (apenas em novos lançamentos; ao editar um já existente, o valor original é preservado).
+  const handleComboioChange = (novoComboioId: string) => {
+    setComboioId(novoComboioId);
+    if (editingId === null) {
+      setBombaInicial(getUltimaBombaFinal(novoComboioId));
+    }
   };
 
   // Form Submit Handler
@@ -439,8 +462,9 @@ export default function LancamentosTab({
                     <input type="number" value={kmInicial} onChange={e => setKmInicial(Number(e.target.value))} placeholder="0" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xxs font-bold uppercase tracking-wider text-slate-400">Bomba Inicial (Litros)</label>
+                    <label className="text-xxs font-bold uppercase tracking-wider text-slate-400">Bomba Inicial (Litros) <span className="text-emerald-500 normal-case font-semibold">— auto (última leitura)</span></label>
                     <input type="number" value={bombaInicial} onChange={e => setBombaInicial(Number(e.target.value))} placeholder="1000" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500" />
+                    <span className="text-[9px] text-slate-500 font-mono block">Preenchido com a Bomba Final do último abastecimento deste comboio</span>
                   </div>
                   <div className="space-y-1">
                     <label className="text-xxs font-bold uppercase tracking-wider text-slate-400">Quantidade de Litros *</label>
@@ -456,7 +480,7 @@ export default function LancamentosTab({
 
                   <div className="space-y-1">
                     <label className="text-xxs font-bold uppercase tracking-wider text-slate-400">Comboio Abastecedor</label>
-                    <select value={comboioId} onChange={e => setComboioId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer">
+                    <select value={comboioId} onChange={e => handleComboioChange(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer">
                       <option value="">Selecione...</option>
                       {comboios.map(com => (
                         <option key={com.id} value={com.id} className="bg-slate-900 text-white">{com.nome}</option>
