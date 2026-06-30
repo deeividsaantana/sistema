@@ -15,7 +15,8 @@ import {
   EtapaServico, 
   Abastecimento, 
   Lubrificacao, 
-  RdoDiario 
+  RdoDiario,
+  ListaPresenca 
 } from '../types';
 
 import { 
@@ -35,6 +36,7 @@ import {
 } from 'lucide-react';
 
 import reneaLogoFull from '../assets/images/renea_logo_1782558137669.jpg';
+import spmarLogo from '../assets/images/spmar_logo.png';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 
@@ -51,6 +53,7 @@ interface RelatoriosTabProps {
   abastecimentos: Abastecimento[];
   lubrificacoes: Lubrificacao[];
   rdos: RdoDiario[];
+  listasPresenca: ListaPresenca[];
 }
 
 type ReportType = 
@@ -61,7 +64,8 @@ type ReportType =
   | 'rdo_data' 
   | 'equipamentos_mobilizados' 
   | 'equipamentos_manutencao' 
-  | 'resumo_obra';
+  | 'resumo_obra'
+  | 'presenca_lista';
 
 export default function RelatoriosTab({
   empresas,
@@ -74,7 +78,8 @@ export default function RelatoriosTab({
   etapas,
   abastecimentos,
   lubrificacoes,
-  rdos
+  rdos,
+  listasPresenca
 }: RelatoriosTabProps) {
 
   // Selected report type
@@ -96,41 +101,51 @@ export default function RelatoriosTab({
     switch (reportType) {
       
       case 'consumo_frota': {
-        // Group fuel by fleet
-        const grouped: { [id: string]: { eq: Equipamento; liters: number; count: number; company: string } } = {};
-        
+        // Pivot: uma linha por frota, uma coluna por produto (combustível ou lubrificante)
+        type LinhaFrota = { eq: Equipamento; company: string; localizacao: string; produtos: { [nomeProduto: string]: number } };
+        const grouped: { [id: string]: LinhaFrota } = {};
+
+        const getOrCreate = (eq: Equipamento): LinhaFrota => {
+          if (!grouped[eq.id]) {
+            const companyName = empresas.find(em => em.id === eq.empresaId)?.nome || 'Outra';
+            const localizacao = obras.find(o => o.id === eq.localAtualId)?.nome || 'NÃO LOCALIZADO';
+            grouped[eq.id] = { eq, company: companyName, localizacao, produtos: {} };
+          }
+          return grouped[eq.id];
+        };
+
         abastecimentos.forEach(ab => {
-          // Date filter check
           if (ab.data < dataInicio || ab.data > dataFim) return;
-
-          // Fuel type filter
           if (filtroCombustivelId && ab.tipoCombustivelId !== filtroCombustivelId) return;
-
-          // Operator filter
           if (filtroResponsavel && !ab.responsavel.toLowerCase().includes(filtroResponsavel.toLowerCase())) return;
 
           const eq = equipamentos.find(e => e.id === ab.equipamentoId);
           if (!eq) return;
-
-          // Company filter
           if (filtroEmpresaId && eq.empresaId !== filtroEmpresaId) return;
-
-          // Specific equipment filter
           if (filtroEquipamentoId && eq.id !== filtroEquipamentoId) return;
-
-          // Site filter
           if (filtroObraId && eq.localAtualId !== filtroObraId) return;
 
-          const companyName = empresas.find(em => em.id === eq.empresaId)?.nome || 'Outra';
-
-          if (!grouped[eq.id]) {
-            grouped[eq.id] = { eq, liters: 0, count: 0, company: companyName };
-          }
-          grouped[eq.id].liters += ab.quantidadeLitros;
-          grouped[eq.id].count += 1;
+          const produtoNome = combustiveis.find(c => c.id === ab.tipoCombustivelId)?.nome || 'Combustível';
+          const linha = getOrCreate(eq);
+          linha.produtos[produtoNome] = (linha.produtos[produtoNome] || 0) + ab.quantidadeLitros;
         });
 
-        return Object.values(grouped).sort((a,b) => b.liters - a.liters);
+        lubrificacoes.forEach(lub => {
+          if (lub.data < dataInicio || lub.data > dataFim) return;
+          if (filtroResponsavel && !lub.responsavel.toLowerCase().includes(filtroResponsavel.toLowerCase())) return;
+
+          const eq = equipamentos.find(e => e.id === lub.equipamentoId);
+          if (!eq) return;
+          if (filtroEmpresaId && eq.empresaId !== filtroEmpresaId) return;
+          if (filtroEquipamentoId && eq.id !== filtroEquipamentoId) return;
+          if (filtroObraId && eq.localAtualId !== filtroObraId) return;
+
+          const produtoNome = lubrificantes.find(p => p.id === lub.produtoLubrificacaoId)?.nome || 'Lubrificante';
+          const linha = getOrCreate(eq);
+          linha.produtos[produtoNome] = (linha.produtos[produtoNome] || 0) + lub.quantidade;
+        });
+
+        return Object.values(grouped).sort((a, b) => a.eq.prefixo.localeCompare(b.eq.prefixo));
       }
 
       case 'consumo_empresa': {
@@ -260,12 +275,58 @@ export default function RelatoriosTab({
         return Object.values(summary);
       }
 
+      case 'presenca_lista': {
+        // Flatten all attendance lists into individual rows: one row per worker per day
+        type LinhaPresenca = { data: string; obraNome: string; funcionarioNome: string; cargo: string; presente: boolean; observacao: string; responsavel: string };
+        const linhas: LinhaPresenca[] = [];
+
+        listasPresenca.forEach(lista => {
+          if (lista.data < dataInicio || lista.data > dataFim) return;
+          if (filtroObraId && lista.obraId !== filtroObraId) return;
+
+          const obra = obras.find(o => o.id === lista.obraId);
+
+          lista.funcionarios.forEach(item => {
+            const func = funcionarios.find(f => f.id === item.funcionarioId);
+            if (!func) return;
+            if (filtroEmpresaId && func.empresaId !== filtroEmpresaId) return;
+            if (filtroResponsavel && !lista.responsavel.toLowerCase().includes(filtroResponsavel.toLowerCase())) return;
+
+            linhas.push({
+              data: lista.data,
+              obraNome: obra ? obra.nome : '—',
+              funcionarioNome: func.nome,
+              cargo: func.cargo,
+              presente: item.presente,
+              observacao: item.observacao || '',
+              responsavel: lista.responsavel
+            });
+          });
+        });
+
+        return linhas.sort((a, b) => b.data.localeCompare(a.data) || a.funcionarioNome.localeCompare(b.funcionarioNome));
+      }
+
       default:
         return [];
     }
   };
 
   const results = getFilteredData();
+
+  // Colunas de produto dinâmicas (combustíveis + lubrificantes), na ordem cadastrada,
+  // usadas no relatório "Consumo por Frota" no padrão de planilha RENEA/SPMAR
+  const produtoColunas = reportType === 'consumo_frota'
+    ? Array.from(new Set([...combustiveis.map(c => c.nome), ...lubrificantes.map(p => p.nome)]))
+        .filter(nome => (results as any[]).some(r => r.produtos && r.produtos[nome] !== undefined))
+    : [];
+
+  const produtoTotais: { [nome: string]: number } = {};
+  if (reportType === 'consumo_frota') {
+    produtoColunas.forEach(nome => {
+      produtoTotais[nome] = (results as any[]).reduce((sum, r) => sum + (r.produtos[nome] || 0), 0);
+    });
+  }
 
   const [isExporting, setIsExporting] = useState(false);
 
@@ -301,6 +362,14 @@ export default function RelatoriosTab({
         console.warn("Could not load logo as base64, using fallback text logo.", e);
       }
 
+      // Try to load the SPMAR partner logo (parceiro/concessionária)
+      let spmarLogoBase64 = '';
+      try {
+        spmarLogoBase64 = await getBase64ImageFromUrl(spmarLogo);
+      } catch (e) {
+        console.warn("Could not load SPMAR logo as base64.", e);
+      }
+
       // Define table content based on reportType
       let tableHeaders: string[] = [];
       let tableRows: string[][] = [];
@@ -308,18 +377,22 @@ export default function RelatoriosTab({
       let reportDescription = '';
 
       if (reportType === 'consumo_frota') {
-        reportTitle = 'Consumo Acumulado de Combustível por Frota';
-        reportDescription = `Ranking de consumo total (litros) por equipamento no período de ${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')}.`;
-        tableHeaders = ['Prefixo', 'Equipamento', 'Marca', 'Modelo', 'Proprietário', 'Abastecimentos', 'Volume (Litros)'];
-        tableRows = (results as any[]).map(r => [
+        reportTitle = 'Consumo de Combustível / Lubrificantes';
+        reportDescription = `Consumo por frota e por produto no período de ${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')}.`;
+        tableHeaders = ['Frota', 'Descrição', 'Empresa', ...produtoColunas, 'Localização'];
+        const totaisRow = [
+          'TOTAIS', '', '',
+          ...produtoColunas.map(nome => produtoTotais[nome].toLocaleString('pt-BR', { minimumFractionDigits: 2 })),
+          ''
+        ];
+        const dataRows = (results as any[]).map(r => [
           r.eq.prefixo,
           r.eq.nome,
-          r.eq.marca,
-          r.eq.modelo,
           r.company,
-          r.count.toString(),
-          `${r.liters.toLocaleString('pt-BR')} L`
+          ...produtoColunas.map(nome => r.produtos[nome] !== undefined ? r.produtos[nome].toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '-'),
+          r.localizacao
         ]);
+        tableRows = [totaisRow, ...dataRows];
       } else if (reportType === 'consumo_empresa') {
         reportTitle = 'Consumo de Combustível por Empresa';
         reportDescription = `Divisão do volume abastecido (litros) por empresa proprietária no período de ${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')}.`;
@@ -418,6 +491,18 @@ export default function RelatoriosTab({
           `${r.averageWorkers.toFixed(1)} pessoas`,
           r.site.endereco
         ]);
+      } else if (reportType === 'presenca_lista') {
+        reportTitle = 'Lista de Presença';
+        reportDescription = `Relação de funcionários presentes e ausentes no período de ${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')}.`;
+        tableHeaders = ['Data', 'Obra', 'Funcionário', 'Cargo', 'Situação', 'Observação'];
+        tableRows = (results as any[]).map(r => [
+          r.data.split('-').reverse().join('/'),
+          r.obraNome,
+          r.funcionarioNome,
+          r.cargo,
+          r.presente ? 'PRESENTE' : 'AUSENTE',
+          r.observacao || '—'
+        ]);
       }
 
       // Drawing header on each page
@@ -428,31 +513,40 @@ export default function RelatoriosTab({
         doc.setFillColor(15, 81, 50); 
         doc.rect(0, 0, pageWidth, 4, 'F');
 
+        // Logo RENEA (esquerda)
         if (logoBase64) {
-          doc.addImage(logoBase64, 'JPEG', 15, 8, 38, 18);
+          doc.addImage(logoBase64, 'JPEG', 12, 9, 34, 16);
         } else {
           doc.setFont('Helvetica', 'bold');
           doc.setFontSize(16);
           doc.setTextColor(15, 81, 50);
-          doc.text("RENEA", 15, 18);
+          doc.text("RENEA", 12, 18);
           doc.setFontSize(8);
           doc.setTextColor(120);
-          doc.text("INFRAESTRUTURA", 15, 23);
+          doc.text("INFRAESTRUTURA", 12, 23);
         }
 
+        // Logo do parceiro/concessionária SPMAR (direita)
+        if (spmarLogoBase64) {
+          const spmarW = 32;
+          const spmarH = spmarW * (193 / 889);
+          doc.addImage(spmarLogoBase64, 'PNG', pageWidth - 12 - spmarW, 17 - spmarH / 2, spmarW, spmarH);
+        }
+
+        // Título centralizado (padrão de planilha: nome do relatório + período)
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(11);
-        doc.setTextColor(30, 41, 59); 
-        doc.text(reportTitle, pageWidth - 15, 14, { align: 'right' });
+        doc.setFontSize(12);
+        doc.setTextColor(30, 41, 59);
+        doc.text(reportTitle.toUpperCase(), pageWidth / 2, 13, { align: 'center' });
 
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(8);
         doc.setTextColor(100);
-        const generatedAt = `Gerado em: ${new Date().toLocaleString('pt-BR')} por deivid.santana7002@gmail.com`;
-        doc.text(generatedAt, pageWidth - 15, 19, { align: 'right' });
-
         const periodStr = `Período: ${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')}`;
-        doc.text(periodStr, pageWidth - 15, 24, { align: 'right' });
+        doc.text(periodStr, pageWidth / 2, 19, { align: 'center' });
+
+        const generatedAt = `Gerado em: ${new Date().toLocaleString('pt-BR')}`;
+        doc.text(generatedAt, pageWidth / 2, 24, { align: 'center' });
 
         doc.setDrawColor(226, 232, 240);
         doc.setLineWidth(0.5);
@@ -535,24 +629,35 @@ export default function RelatoriosTab({
         console.warn("Could not load logo as base64 for excel.", e);
       }
 
+      let spmarLogoBase64Excel = '';
+      try {
+        spmarLogoBase64Excel = await getBase64ImageFromUrl(spmarLogo);
+      } catch (e) {
+        console.warn("Could not load SPMAR logo as base64 for excel.", e);
+      }
+
       const filename = `Renea_Relatorio_${reportType}_${dataInicio}_a_${dataFim}.xls`;
       const periodo = `${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')}`;
 
       let headers: string[] = [];
       let rows: string[][] = [];
       let title = '';
+      let totalsRow: string[] | null = null;
 
       if (reportType === 'consumo_frota') {
-        title = 'Consumo por Frota';
-        headers = ['Prefixo', 'Equipamento', 'Marca', 'Modelo', 'Proprietário', 'Total Abastecimentos', 'Volume Total (Litros)'];
+        title = 'Consumo de Combustível / Lubrificantes';
+        headers = ['Frota', 'Descrição', 'Empresa', ...produtoColunas, 'Localização'];
+        totalsRow = [
+          'TOTAIS', '', '',
+          ...produtoColunas.map(nome => produtoTotais[nome].toLocaleString('pt-BR', { minimumFractionDigits: 2 })),
+          ''
+        ];
         rows = (results as any[]).map(r => [
           r.eq.prefixo,
           r.eq.nome,
-          r.eq.marca,
-          r.eq.modelo,
           r.company,
-          r.count.toString(),
-          r.liters.toString()
+          ...produtoColunas.map(nome => r.produtos[nome] !== undefined ? r.produtos[nome].toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '-'),
+          r.localizacao
         ]);
       } else if (reportType === 'consumo_empresa') {
         title = 'Consumo por Empresa';
@@ -646,13 +751,25 @@ export default function RelatoriosTab({
           r.averageWorkers.toString(),
           r.site.endereco
         ]);
+      } else if (reportType === 'presenca_lista') {
+        title = 'Lista de Presença';
+        headers = ['Data', 'Obra', 'Funcionário', 'Cargo', 'Situação', 'Observação'];
+        rows = (results as any[]).map(r => [
+          r.data.split('-').reverse().join('/'),
+          r.obraNome,
+          r.funcionarioNome,
+          r.cargo,
+          r.presente ? 'PRESENTE' : 'AUSENTE',
+          r.observacao || '—'
+        ]);
       }
 
       const colCount = headers.length;
       const isResumo = reportType === 'resumo_obra';
-      const titleFontSize = isResumo ? '16pt' : '12pt';
-      const headerRowNumber = logoBase64 ? 5 : 4;
-      const autoFilterEndRow = headerRowNumber + Math.max(rows.length, 1);
+      const titleFontSize = isResumo ? '16pt' : '14pt';
+      const headerRowNumber = 3; // linha de logos/título (1) + linha de subtítulo/período (1) + cabeçalho da tabela (3)
+      const totalDataRowsForFilter = rows.length + (totalsRow ? 1 : 0);
+      const autoFilterEndRow = headerRowNumber + Math.max(totalDataRowsForFilter, 1);
 
       const escapeHtml = (value: string | number | null | undefined) => String(value ?? '—')
         .replace(/&/g, '&amp;')
@@ -741,6 +858,19 @@ export default function RelatoriosTab({
     border: 1px solid #000000;
     height: 22px;
   }
+  .totals-row td {
+    background-color: #F2F2F2 !important;
+    font-weight: bold;
+    color: #0F5132 !important;
+  }
+  .header-grid {
+    width: 100%;
+    border: none;
+  }
+  .header-grid td {
+    border: none;
+    background: #FFFFFF;
+  }
 </style>
 <!--[if gte mso 9]>
 <xml>
@@ -771,17 +901,17 @@ export default function RelatoriosTab({
 <body>
   <table>
     <colgroup>${colgroup}</colgroup>
-    ${logoBase64 ? `
     <tr>
       <td colspan="${colCount}" class="logo-cell">
-        <img src="${logoBase64}" width="150" height="60" />
+        <table class="header-grid"><tr>
+          <td style="width:25%; text-align:left; vertical-align:middle;">${logoBase64 ? `<img src="${logoBase64}" width="130" height="52" />` : '<b>RENEA</b>'}</td>
+          <td style="width:50%; text-align:center; vertical-align:middle; font-size:${titleFontSize}; font-weight:bold; color:#000000;">${escapeHtml(title.toUpperCase())}</td>
+          <td style="width:25%; text-align:right; vertical-align:middle;">${spmarLogoBase64Excel ? `<img src="${spmarLogoBase64Excel}" width="120" height="26" />` : ''}</td>
+        </tr></table>
       </td>
-    </tr>` : ''}
-    <tr>
-      <td colspan="${colCount}" class="title-cell">RENEA INFRAESTRUTURA</td>
     </tr>
     <tr>
-      <td colspan="${colCount}" class="subtitle-cell">Relatório: ${escapeHtml(title)} | Período: ${escapeHtml(periodo)}</td>
+      <td colspan="${colCount}" class="subtitle-cell" style="text-align:center;">Período: ${escapeHtml(periodo)} • Gerado em ${escapeHtml(new Date().toLocaleString('pt-BR'))}</td>
     </tr>
     <thead>
       <tr>
@@ -789,6 +919,10 @@ export default function RelatoriosTab({
       </tr>
     </thead>
     <tbody>
+      ${totalsRow ? `
+      <tr class="totals-row">
+        ${totalsRow.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}
+      </tr>` : ''}
       ${rows.length > 0 ? rows.map(row => `
       <tr>
         ${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}
@@ -865,7 +999,8 @@ export default function RelatoriosTab({
             { id: 'rdo_data', label: 'RDO Diário por Obra', icon: ClipboardList, desc: 'Extrato das atividades físicas diárias.' },
             { id: 'equipamentos_mobilizados', label: 'Equipamentos Ativos', icon: Truck, desc: 'Frota ativa operando nas frentes de obra.' },
             { id: 'equipamentos_manutencao', label: 'Frota em Manutenção', icon: AlertTriangle, desc: 'Inventário sob custódia da oficina.' },
-            { id: 'resumo_obra', label: 'Resumo Geral por Obra', icon: MapPin, desc: 'Consolidado de trabalhadores e frentes.' }
+            { id: 'resumo_obra', label: 'Resumo Geral por Obra', icon: MapPin, desc: 'Consolidado de trabalhadores e frentes.' },
+            { id: 'presenca_lista', label: 'Lista de Presença', icon: CheckCircle, desc: 'Relação de funcionários presentes/ausentes por dia e obra.' }
           ].map(r => {
             const active = reportType === r.id;
             const Icon = r.icon;
@@ -994,6 +1129,7 @@ export default function RelatoriosTab({
                   {reportType === 'equipamentos_mobilizados' && `Frota Ativa Mobilizada em Canteiros`}
                   {reportType === 'equipamentos_manutencao' && `Equipamentos Parados em Oficina`}
                   {reportType === 'resumo_obra' && `Resolidado Estatístico de Mão de Obra por Canteiro`}
+                  {reportType === 'presenca_lista' && `Lista de Presença (${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')})`}
                 </h2>
               </div>
               
@@ -1015,21 +1151,34 @@ export default function RelatoriosTab({
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="border-b border-slate-800 text-slate-400 uppercase font-mono text-[10px]">
-                        <th className="pb-3 px-3">Prefixo</th>
-                        <th className="pb-3 px-3">Equipamento</th>
-                        <th className="pb-3 px-3">Proprietário</th>
-                        <th className="pb-3 px-3 text-center">Nº Abast.</th>
-                        <th className="pb-3 px-3 text-right">Volume (Litros)</th>
+                        <th className="pb-3 px-3">Frota</th>
+                        <th className="pb-3 px-3">Descrição</th>
+                        <th className="pb-3 px-3">Empresa</th>
+                        {produtoColunas.map(nome => (
+                          <th key={nome} className="pb-3 px-3 text-right">{nome}</th>
+                        ))}
+                        <th className="pb-3 px-3">Localização</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-850">
+                      <tr className="bg-slate-950/40 font-black">
+                        <td className="py-2.5 px-3" colSpan={3}>TOTAIS</td>
+                        {produtoColunas.map(nome => (
+                          <td key={nome} className="py-2.5 px-3 text-right text-emerald-400 font-mono">{produtoTotais[nome].toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        ))}
+                        <td className="py-2.5 px-3" />
+                      </tr>
                       {(results as any[]).map(r => (
                         <tr key={r.eq.id} className="hover:bg-slate-950/20">
                           <td className="py-3 px-3 font-mono font-black text-emerald-400">{r.eq.prefixo}</td>
                           <td className="py-3 px-3 text-slate-200 font-bold">{r.eq.nome}</td>
                           <td className="py-3 px-3 text-slate-400">{r.company}</td>
-                          <td className="py-3 px-3 text-center text-slate-300 font-mono">{r.count}</td>
-                          <td className="py-3 px-3 text-right text-white font-mono font-black">{r.liters.toLocaleString('pt-BR')} L</td>
+                          {produtoColunas.map(nome => (
+                            <td key={nome} className="py-3 px-3 text-right text-white font-mono">
+                              {r.produtos[nome] !== undefined ? r.produtos[nome].toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '-'}
+                            </td>
+                          ))}
+                          <td className="py-3 px-3 text-slate-300">{r.localizacao}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1218,6 +1367,37 @@ export default function RelatoriosTab({
                           <td className="py-4 px-3 text-center text-slate-300 font-mono font-bold">{item.rdoCount} frentes</td>
                           <td className="py-4 px-3 text-center text-emerald-400 font-mono font-black">{item.averageWorkers} pessoas</td>
                           <td className="py-4 px-3 text-right text-slate-300 font-mono">{item.rdoCount} RDOs</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+
+                {reportType === 'presenca_lista' && (
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 uppercase font-mono text-[10px]">
+                        <th className="pb-3 px-3">Data</th>
+                        <th className="pb-3 px-3">Obra</th>
+                        <th className="pb-3 px-3">Funcionário</th>
+                        <th className="pb-3 px-3">Cargo</th>
+                        <th className="pb-3 px-3 text-center">Situação</th>
+                        <th className="pb-3 px-3">Observação</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-850">
+                      {(results as any[]).map((r, idx) => (
+                        <tr key={idx} className="hover:bg-slate-950/20">
+                          <td className="py-3.5 px-3 font-mono font-bold text-slate-100">{r.data.split('-').reverse().join('/')}</td>
+                          <td className="py-3.5 px-3 text-slate-300">{r.obraNome}</td>
+                          <td className="py-3.5 px-3 font-semibold text-slate-200">{r.funcionarioNome}</td>
+                          <td className="py-3.5 px-3 text-slate-400">{r.cargo}</td>
+                          <td className="py-3.5 px-3 text-center">
+                            <span className={`text-xxs px-2 py-0.5 border rounded font-bold ${r.presente ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-400'}`}>
+                              {r.presente ? 'PRESENTE' : 'AUSENTE'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-3 text-slate-500 text-xxs">{r.observacao || '—'}</td>
                         </tr>
                       ))}
                     </tbody>
