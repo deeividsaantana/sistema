@@ -129,6 +129,9 @@ export default function CadastrosTab({
   const [eqStatus, setEqStatus] = useState<Equipamento['status']>('Ativo');
   const [eqLocalId, setEqLocalId] = useState('');
   const [eqObservacao, setEqObservacao] = useState('');
+  const [eqFoto, setEqFoto] = useState<string>('');
+  const [eqHorasDisponiveis, setEqHorasDisponiveis] = useState<number>(0);
+  const [eqHorasIndisponiveis, setEqHorasIndisponiveis] = useState<number>(0);
 
   // Funcionario Fields
   const [funNome, setFunNome] = useState('');
@@ -152,7 +155,7 @@ export default function CadastrosTab({
     setValidationError('');
     setEmpNome(''); setEmpCnpj(''); setEmpTelefone(''); setEmpResponsavel('');
     setObrNome(''); setObrEndereco(''); setObrResponsavel(''); setObrStatus('Ativa');
-    setEqPrefixo(''); setEqNome(''); setEqTipo(''); setEqMarca(''); setEqModelo(''); setEqSeriePlaca(''); setEqEmpresaId(''); setEqStatus('Ativo'); setEqLocalId(''); setEqObservacao('');
+    setEqPrefixo(''); setEqNome(''); setEqTipo(''); setEqMarca(''); setEqModelo(''); setEqSeriePlaca(''); setEqEmpresaId(''); setEqStatus('Ativo'); setEqLocalId(''); setEqObservacao(''); setEqFoto(''); setEqHorasDisponiveis(0); setEqHorasIndisponiveis(0);
     setFunNome(''); setFunCargo(''); setFunTelefone(''); setFunEmpresaId(''); setFunAtivo(true);
     setComNome(''); setComPlaca(''); setComCapacidade(3000); setComResponsavel('');
     setSimpleName('');
@@ -185,6 +188,7 @@ export default function CadastrosTab({
     } else if (subTab === 'equipamentos') {
       const x = item as Equipamento;
       setEqPrefixo(x.prefixo); setEqNome(x.nome); setEqTipo(x.tipo); setEqMarca(x.marca); setEqModelo(x.modelo); setEqSeriePlaca(x.seriePlaca); setEqEmpresaId(x.empresaId); setEqStatus(x.status); setEqLocalId(x.localAtualId); setEqObservacao(x.observacao);
+      setEqFoto(x.foto || ''); setEqHorasDisponiveis(x.horasDisponiveis || 0); setEqHorasIndisponiveis(x.horasIndisponiveis || 0);
     } else if (subTab === 'funcionarios') {
       const x = item as Funcionario;
       setFunNome(x.nome); setFunCargo(x.cargo); setFunTelefone(x.telefone); setFunEmpresaId(x.empresaId); setFunAtivo(x.ativo);
@@ -247,7 +251,10 @@ export default function CadastrosTab({
         empresaId: eqEmpresaId,
         status: eqStatus,
         localAtualId: eqLocalId || (obras[0] ? obras[0].id : ''),
-        observacao: eqObservacao.trim()
+        observacao: eqObservacao.trim(),
+        foto: eqFoto || undefined,
+        horasDisponiveis: Number(eqHorasDisponiveis) || 0,
+        horasIndisponiveis: Number(eqHorasIndisponiveis) || 0
       }, isNew);
 
     } else if (subTab === 'funcionarios') {
@@ -540,7 +547,63 @@ export default function CadastrosTab({
                   <label className="text-xxs font-bold uppercase tracking-wider text-slate-400">Observações Extras</label>
                   <input type="text" value={eqObservacao} onChange={e => setEqObservacao(e.target.value)} placeholder="Ex: Operador fixo: Roberto" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500" />
                 </div>
+
+                <div className="space-y-1">
+                  <label className="text-xxs font-bold uppercase tracking-wider text-slate-400">Horas Disponíveis (período)</label>
+                  <input type="number" min="0" step="0.5" value={eqHorasDisponiveis} onChange={e => setEqHorasDisponiveis(Number(e.target.value))} placeholder="Ex: 220" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xxs font-bold uppercase tracking-wider text-slate-400">Horas Indisponíveis (quebra/manutenção)</label>
+                  <input type="number" min="0" step="0.5" value={eqHorasIndisponiveis} onChange={e => setEqHorasIndisponiveis(Number(e.target.value))} placeholder="Ex: 12" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xxs font-bold uppercase tracking-wider text-slate-400">Taxa de Disponibilidade / Deficiência</label>
+                  <div className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-300 flex items-center justify-between">
+                    {(() => {
+                      const total = (Number(eqHorasDisponiveis) || 0) + (Number(eqHorasIndisponiveis) || 0);
+                      const disp = total > 0 ? ((Number(eqHorasDisponiveis) || 0) / total) * 100 : 0;
+                      const def = total > 0 ? 100 - disp : 0;
+                      return (
+                        <>
+                          <span className="text-emerald-400 font-bold">{disp.toFixed(1)}% disp.</span>
+                          <span className="text-rose-400 font-bold">{def.toFixed(1)}% defic.</span>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                <div className="md:col-span-4 space-y-1">
+                  <label className="text-xxs font-bold uppercase tracking-wider text-slate-400">Foto do Equipamento</label>
+                  <div className="flex items-center gap-3">
+                    {eqFoto && (
+                      <img src={eqFoto} alt="Pré-visualização" className="w-16 h-16 rounded-xl object-cover border border-slate-800" />
+                    )}
+                    <label className="flex-1 cursor-pointer bg-slate-950 border border-dashed border-slate-700 rounded-xl px-4 py-2.5 text-xs text-slate-400 hover:border-emerald-500 hover:text-emerald-400 transition-colors text-center">
+                      {eqFoto ? 'Trocar foto...' : 'Clique para enviar uma foto (câmera ou galeria)'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = () => setEqFoto(reader.result as string);
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                    {eqFoto && (
+                      <button type="button" onClick={() => setEqFoto('')} className="p-2.5 bg-slate-800 text-slate-300 hover:text-rose-400 rounded-xl transition-colors cursor-pointer" title="Remover foto">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
+
             )}
 
             {subTab === 'funcionarios' && (
@@ -743,13 +806,14 @@ export default function CadastrosTab({
                   <th className="py-3.5 px-5">Proprietário</th>
                   <th className="py-3.5 px-5">Status</th>
                   <th className="py-3.5 px-5">Local Atual</th>
+                  <th className="py-3.5 px-5">Disponibilidade</th>
                   <th className="py-3.5 px-5 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-850">
                 {filteredEquipamentos.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-10 text-center text-slate-500 italic">Nenhum equipamento correspondente encontrado.</td>
+                    <td colSpan={7} className="py-10 text-center text-slate-500 italic">Nenhum equipamento correspondente encontrado.</td>
                   </tr>
                 ) : (
                   filteredEquipamentos.map(item => {
@@ -768,6 +832,13 @@ export default function CadastrosTab({
                       <tr key={item.id} className="hover:bg-slate-950/20 transition-colors">
                         <td className="py-4 px-5">
                           <div className="flex items-center gap-2">
+                            {item.foto ? (
+                              <img src={item.foto} alt={item.nome} className="w-8 h-8 rounded-lg object-cover border border-slate-800 shrink-0" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center shrink-0">
+                                <Truck className="w-3.5 h-3.5 text-slate-600" />
+                              </div>
+                            )}
                             <span className="font-mono font-black text-emerald-400 text-xs bg-slate-950 border border-slate-800 px-2 py-0.5 rounded-md">
                               {item.prefixo}
                             </span>
@@ -788,6 +859,22 @@ export default function CadastrosTab({
                         </td>
                         <td className="py-4 px-5 text-slate-300 max-w-[140px] truncate" title={local ? local.nome : ''}>
                           {local ? local.nome : '—'}
+                        </td>
+                        <td className="py-4 px-5">
+                          {(() => {
+                            const disp = item.horasDisponiveis || 0;
+                            const indisp = item.horasIndisponiveis || 0;
+                            const total = disp + indisp;
+                            if (total === 0) return <span className="text-[10px] text-slate-600 italic">Sem registro</span>;
+                            const taxaDisp = (disp / total) * 100;
+                            const taxaDef = 100 - taxaDisp;
+                            return (
+                              <div className="flex flex-col gap-0.5 min-w-[90px]">
+                                <span className="text-[10px] font-bold text-emerald-400">{taxaDisp.toFixed(1)}% disp.</span>
+                                <span className="text-[9px] font-semibold text-rose-400">{taxaDef.toFixed(1)}% defic.</span>
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="py-4 px-5 text-right">
                           <div className="flex items-center justify-end gap-2">
