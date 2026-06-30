@@ -18,7 +18,11 @@ import {
   RdoDiario,
   HistoryLog,
   ListaPresenca,
-  OrdemServico
+  OrdemServico,
+  GrupoEquipe,
+  PresencaApontamento,
+  PresencaStatus,
+  HistoricoPresenca
 } from './types';
 
 import { 
@@ -35,7 +39,10 @@ import {
   INITIAL_RDOS,
   INITIAL_HISTORY_LOGS,
   INITIAL_PRESENCAS,
-  INITIAL_ORDENS_SERVICO
+  INITIAL_ORDENS_SERVICO,
+  INITIAL_GRUPOS_EQUIPES,
+  INITIAL_PRESENCAS_LINK,
+  INITIAL_HISTORICO_PRESENCAS
 } from './utils/initialData';
 
 // Subcomponents Imports
@@ -46,6 +53,8 @@ import RelatoriosTab from './components/RelatoriosTab';
 import ConfiguracoesTab from './components/ConfiguracoesTab';
 import PresencaTab from './components/PresencaTab';
 import ManutencaoEquipamentosTab from './components/ManutencaoEquipamentosTab';
+import ControlePresencaTab from './components/ControlePresencaTab';
+import PresencaLinkExterno from './components/PresencaLinkExterno';
 
 // Motion and Logo Import
 import { motion, AnimatePresence } from 'motion/react';
@@ -89,6 +98,14 @@ import { AppNotification } from './types';
 // genuínas do usuário (cadastros, edições, sincronizações com o Firebase etc.)
 const getInitialNotifications = (): AppNotification[] => [];
 
+const getPresenceTokenFromUrl = () => {
+  if (typeof window === 'undefined') return '';
+  const byQuery = new URLSearchParams(window.location.search).get('presenca');
+  if (byQuery) return decodeURIComponent(byQuery);
+  const match = window.location.pathname.match(/\/presenca-link\/([^/?#]+)/);
+  return match ? decodeURIComponent(match[1]) : '';
+};
+
 export default function App() {
   // Login State
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
@@ -124,7 +141,12 @@ export default function App() {
   const [rdos, setRdos] = useState<RdoDiario[]>([]);
   const [listasPresenca, setListasPresenca] = useState<ListaPresenca[]>([]);
   const [ordensServico, setOrdensServico] = useState<OrdemServico[]>([]);
+  const [gruposEquipe, setGruposEquipe] = useState<GrupoEquipe[]>([]);
+  const [presencasLink, setPresencasLink] = useState<PresencaApontamento[]>([]);
+  const [historicoPresencas, setHistoricoPresencas] = useState<HistoricoPresenca[]>([]);
   const [historyLogs, setHistoryLogs] = useState<HistoryLog[]>([]);
+  const [isExternalPresenceLoading, setIsExternalPresenceLoading] = useState<boolean>(Boolean(getPresenceTokenFromUrl()));
+  const externalPresenceToken = getPresenceTokenFromUrl();
 
   // Hydrate states from localstorage on mount
   useEffect(() => {
@@ -150,9 +172,13 @@ export default function App() {
       localStorage.setItem('renea_rdos', JSON.stringify(INITIAL_RDOS));
       localStorage.setItem('renea_listas_presenca', JSON.stringify(INITIAL_PRESENCAS));
       localStorage.setItem('renea_ordens_servico', JSON.stringify(INITIAL_ORDENS_SERVICO));
+      localStorage.setItem('renea_grupos_equipes', JSON.stringify(INITIAL_GRUPOS_EQUIPES));
+      localStorage.setItem('renea_presencas_link', JSON.stringify(INITIAL_PRESENCAS_LINK));
+      localStorage.setItem('renea_historico_presencas', JSON.stringify(INITIAL_HISTORICO_PRESENCAS));
       localStorage.setItem('renea_history_logs', JSON.stringify(INITIAL_HISTORY_LOGS));
       localStorage.setItem('renea_notifications', JSON.stringify(getInitialNotifications()));
       localStorage.setItem('renea_data_loaded_v2', 'true');
+      localStorage.setItem('renea_colaboradores_planilha_v1', 'true');
 
       setEmpresas(INITIAL_EMPRESAS);
       setObras(INITIAL_OBRAS);
@@ -167,6 +193,9 @@ export default function App() {
       setRdos(INITIAL_RDOS);
       setListasPresenca(INITIAL_PRESENCAS);
       setOrdensServico(INITIAL_ORDENS_SERVICO);
+      setGruposEquipe(INITIAL_GRUPOS_EQUIPES);
+      setPresencasLink(INITIAL_PRESENCAS_LINK);
+      setHistoricoPresencas(INITIAL_HISTORICO_PRESENCAS);
       setHistoryLogs(INITIAL_HISTORY_LOGS);
       setNotifications(getInitialNotifications());
     } else {
@@ -183,13 +212,17 @@ export default function App() {
       const savedRdos = localStorage.getItem('renea_rdos');
       const savedListasPresenca = localStorage.getItem('renea_listas_presenca');
       const savedOrdensServico = localStorage.getItem('renea_ordens_servico');
+      const savedGruposEquipe = localStorage.getItem('renea_grupos_equipes');
+      const savedPresencasLink = localStorage.getItem('renea_presencas_link');
+      const savedHistoricoPresencas = localStorage.getItem('renea_historico_presencas');
       const savedHistory = localStorage.getItem('renea_history_logs');
       const savedNotifications = localStorage.getItem('renea_notifications');
+      const shouldMigratePresencePeople = localStorage.getItem('renea_colaboradores_planilha_v1') !== 'true';
 
       setEmpresas(savedEmpresas ? JSON.parse(savedEmpresas) : INITIAL_EMPRESAS);
       setObras(savedObras ? JSON.parse(savedObras) : INITIAL_OBRAS);
       setEquipamentos(savedEquipamentos ? JSON.parse(savedEquipamentos) : INITIAL_EQUIPAMENTOS);
-      setFuncionarios(savedFuncionarios ? JSON.parse(savedFuncionarios) : INITIAL_FUNCIONARIOS);
+      setFuncionarios(shouldMigratePresencePeople ? INITIAL_FUNCIONARIOS : (savedFuncionarios ? JSON.parse(savedFuncionarios) : INITIAL_FUNCIONARIOS));
       setComboios(savedComboios ? JSON.parse(savedComboios) : INITIAL_COMBOIOS);
       setCombustiveis(savedCombustiveis ? JSON.parse(savedCombustiveis) : INITIAL_TIPOS_COMBUSTIVEL);
       setLubrificantes(savedLubrificantes ? JSON.parse(savedLubrificantes) : INITIAL_PRODUTOS_LUBRIFICACAO);
@@ -197,10 +230,22 @@ export default function App() {
       setAbastecimentos(savedAbastecimentos ? JSON.parse(savedAbastecimentos) : INITIAL_ABASTECIMENTOS);
       setLubrificacoes(savedLubrificacoes ? JSON.parse(savedLubrificacoes) : INITIAL_LUBRIFICACOES);
       setRdos(savedRdos ? JSON.parse(savedRdos) : INITIAL_RDOS);
-      setListasPresenca(savedListasPresenca ? JSON.parse(savedListasPresenca) : INITIAL_PRESENCAS);
+      setListasPresenca(shouldMigratePresencePeople ? INITIAL_PRESENCAS : (savedListasPresenca ? JSON.parse(savedListasPresenca) : INITIAL_PRESENCAS));
       setOrdensServico(savedOrdensServico ? JSON.parse(savedOrdensServico) : INITIAL_ORDENS_SERVICO);
+      setGruposEquipe(shouldMigratePresencePeople ? INITIAL_GRUPOS_EQUIPES : (savedGruposEquipe ? JSON.parse(savedGruposEquipe) : INITIAL_GRUPOS_EQUIPES));
+      setPresencasLink(savedPresencasLink ? JSON.parse(savedPresencasLink) : INITIAL_PRESENCAS_LINK);
+      setHistoricoPresencas(savedHistoricoPresencas ? JSON.parse(savedHistoricoPresencas) : INITIAL_HISTORICO_PRESENCAS);
       setHistoryLogs(savedHistory ? JSON.parse(savedHistory) : INITIAL_HISTORY_LOGS);
       setNotifications(savedNotifications ? JSON.parse(savedNotifications) : getInitialNotifications());
+
+      if (shouldMigratePresencePeople) {
+        localStorage.setItem('renea_funcionarios', JSON.stringify(INITIAL_FUNCIONARIOS));
+        localStorage.setItem('renea_listas_presenca', JSON.stringify(INITIAL_PRESENCAS));
+        localStorage.setItem('renea_grupos_equipes', JSON.stringify(INITIAL_GRUPOS_EQUIPES));
+        localStorage.setItem('renea_presencas_link', JSON.stringify(INITIAL_PRESENCAS_LINK));
+        localStorage.setItem('renea_historico_presencas', JSON.stringify(INITIAL_HISTORICO_PRESENCAS));
+        localStorage.setItem('renea_colaboradores_planilha_v1', 'true');
+      }
     }
   }, []);
 
@@ -240,7 +285,13 @@ export default function App() {
     customAbastecimentos = abastecimentos,
     customLubrificacoes = lubrificacoes,
     customRdos = rdos,
-    customHistory = historyLogs
+    customHistory = historyLogs,
+    customListasPresenca = listasPresenca,
+    customOrdensServico = ordensServico,
+    customGruposEquipe = gruposEquipe,
+    customPresencasLink = presencasLink,
+    customHistoricoPresencas = historicoPresencas,
+    customNotifications = notifications
   ): Promise<{ success: boolean; message: string }> => {
     const path = 'sistemarenea_cloud/main_data';
     try {
@@ -256,6 +307,12 @@ export default function App() {
         abastecimentos: customAbastecimentos,
         lubrificacoes: customLubrificacoes,
         rdos: customRdos,
+        listasPresenca: customListasPresenca,
+        ordensServico: customOrdensServico,
+        gruposEquipe: customGruposEquipe,
+        presencasLink: customPresencasLink,
+        historicoPresencas: customHistoricoPresencas,
+        notifications: customNotifications,
         historyLogs: customHistory,
         updatedAt: new Date().toISOString()
       };
@@ -327,6 +384,30 @@ export default function App() {
           setRdos(data.rdos);
           localStorage.setItem('renea_rdos', JSON.stringify(data.rdos));
         }
+        if (data.listasPresenca) {
+          setListasPresenca(data.listasPresenca);
+          localStorage.setItem('renea_listas_presenca', JSON.stringify(data.listasPresenca));
+        }
+        if (data.ordensServico) {
+          setOrdensServico(data.ordensServico);
+          localStorage.setItem('renea_ordens_servico', JSON.stringify(data.ordensServico));
+        }
+        if (data.gruposEquipe) {
+          setGruposEquipe(data.gruposEquipe);
+          localStorage.setItem('renea_grupos_equipes', JSON.stringify(data.gruposEquipe));
+        }
+        if (data.presencasLink) {
+          setPresencasLink(data.presencasLink);
+          localStorage.setItem('renea_presencas_link', JSON.stringify(data.presencasLink));
+        }
+        if (data.historicoPresencas) {
+          setHistoricoPresencas(data.historicoPresencas);
+          localStorage.setItem('renea_historico_presencas', JSON.stringify(data.historicoPresencas));
+        }
+        if (data.notifications) {
+          setNotifications(data.notifications);
+          localStorage.setItem('renea_notifications', JSON.stringify(data.notifications));
+        }
         if (data.historyLogs) {
           setHistoryLogs(data.historyLogs);
           localStorage.setItem('renea_history_logs', JSON.stringify(data.historyLogs));
@@ -347,6 +428,12 @@ export default function App() {
       return { success: false, message: `Falha ao importar do Firebase: ${error.message || error}` };
     }
   };
+
+  useEffect(() => {
+    if (!externalPresenceToken) return;
+    setIsExternalPresenceLoading(true);
+    handleDownloadFromFirebase().finally(() => setIsExternalPresenceLoading(false));
+  }, [externalPresenceToken]);
 
   // Helper to save data and append to changes history
   const saveAndLog = (
@@ -396,7 +483,13 @@ export default function App() {
           getLS('renea_abastecimentos', INITIAL_ABASTECIMENTOS),
           getLS('renea_lubrificacoes', INITIAL_LUBRIFICACOES),
           getLS('renea_rdos', INITIAL_RDOS),
-          updatedHistory
+          updatedHistory,
+          getLS('renea_listas_presenca', INITIAL_PRESENCAS),
+          getLS('renea_ordens_servico', INITIAL_ORDENS_SERVICO),
+          getLS('renea_grupos_equipes', INITIAL_GRUPOS_EQUIPES),
+          getLS('renea_presencas_link', INITIAL_PRESENCAS_LINK),
+          getLS('renea_historico_presencas', INITIAL_HISTORICO_PRESENCAS),
+          getLS('renea_notifications', getInitialNotifications())
         ).then(res => {
           if (res.success) {
             console.log("Auto-sync completed successfully.");
@@ -926,6 +1019,245 @@ export default function App() {
     }, 6000);
   };
 
+  const persistPresenceNotifications = (newItems: AppNotification[]) => {
+    const updated = [...newItems, ...notifications].slice(0, 50);
+    setNotifications(updated);
+    localStorage.setItem('renea_notifications', JSON.stringify(updated));
+    setActiveToasts(prev => [...prev, ...newItems]);
+    newItems.forEach(item => {
+      setTimeout(() => {
+        setActiveToasts(prev => prev.filter(t => t.id !== item.id));
+      }, 6000);
+    });
+    return updated;
+  };
+
+  const createPresenceNotification = (
+    title: string,
+    message: string,
+    type: 'info' | 'success' | 'warning' | 'error' = 'info'
+  ): AppNotification => ({
+    id: `notif-pres-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    title,
+    message,
+    type,
+    timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    read: false,
+    source: 'Netlify App'
+  });
+
+  const uploadLocalSnapshotToFirebase = () => {
+    const getLS = (key: string, def: any) => {
+      const val = localStorage.getItem(key);
+      return val ? JSON.parse(val) : def;
+    };
+    return handleUploadToFirebase(
+      getLS('renea_empresas', INITIAL_EMPRESAS),
+      getLS('renea_obras', INITIAL_OBRAS),
+      getLS('renea_equipamentos', INITIAL_EQUIPAMENTOS),
+      getLS('renea_funcionarios', INITIAL_FUNCIONARIOS),
+      getLS('renea_comboios', INITIAL_COMBOIOS),
+      getLS('renea_combustiveis', INITIAL_TIPOS_COMBUSTIVEL),
+      getLS('renea_lubrificantes', INITIAL_PRODUTOS_LUBRIFICACAO),
+      getLS('renea_etapas', INITIAL_ETAPAS_SERVICO),
+      getLS('renea_abastecimentos', INITIAL_ABASTECIMENTOS),
+      getLS('renea_lubrificacoes', INITIAL_LUBRIFICACOES),
+      getLS('renea_rdos', INITIAL_RDOS),
+      getLS('renea_history_logs', INITIAL_HISTORY_LOGS),
+      getLS('renea_listas_presenca', INITIAL_PRESENCAS),
+      getLS('renea_ordens_servico', INITIAL_ORDENS_SERVICO),
+      getLS('renea_grupos_equipes', INITIAL_GRUPOS_EQUIPES),
+      getLS('renea_presencas_link', INITIAL_PRESENCAS_LINK),
+      getLS('renea_historico_presencas', INITIAL_HISTORICO_PRESENCAS),
+      getLS('renea_notifications', getInitialNotifications())
+    );
+  };
+
+  const handleSaveGrupoEquipe = (grupo: GrupoEquipe, isNew: boolean) => {
+    const updated = isNew
+      ? [...gruposEquipe, grupo]
+      : gruposEquipe.map(item => item.id === grupo.id ? grupo : item);
+
+    saveAndLog(
+      'Grupos / Equipes',
+      isNew ? 'Criou' : 'Editou',
+      `${isNew ? 'Criou' : 'Editou'} o grupo "${grupo.nome}" com ${grupo.funcionarioIds.length} funcionário(s) vinculado(s).`,
+      historyLogs,
+      () => {
+        setGruposEquipe(updated);
+        localStorage.setItem('renea_grupos_equipes', JSON.stringify(updated));
+      }
+    );
+    setTimeout(() => uploadLocalSnapshotToFirebase(), 120);
+  };
+
+  const handleDeleteGrupoEquipe = (id: string) => {
+    const grupo = gruposEquipe.find(item => item.id === id);
+    if (!grupo) return;
+    const updated = gruposEquipe.filter(item => item.id !== id);
+
+    saveAndLog(
+      'Grupos / Equipes',
+      'Excluiu',
+      `Excluiu o grupo "${grupo.nome}" e desativou seu link de presença.`,
+      historyLogs,
+      () => {
+        setGruposEquipe(updated);
+        localStorage.setItem('renea_grupos_equipes', JSON.stringify(updated));
+      }
+    );
+    setTimeout(() => uploadLocalSnapshotToFirebase(), 120);
+  };
+
+  const handleSubmitPresencaLink = async (
+    grupo: GrupoEquipe,
+    data: string,
+    items: Array<{ funcionarioId: string; status: PresencaStatus; observacao: string }>
+  ): Promise<{ success: boolean; message: string }> => {
+    const alreadySent = presencasLink.some(item => item.grupoId === grupo.id && item.data === data);
+    if (alreadySent) {
+      const updatedNotifications = persistPresenceNotifications([
+        createPresenceNotification(
+          'Reenvio bloqueado',
+          `Alguém tentou reenviar a presença do grupo ${grupo.nome} para ${data}.`,
+          'warning'
+        )
+      ]);
+      await handleUploadToFirebase(
+        empresas, obras, equipamentos, funcionarios, comboios, combustiveis, lubrificantes, etapas,
+        abastecimentos, lubrificacoes, rdos, historyLogs, listasPresenca, ordensServico,
+        gruposEquipe, presencasLink, historicoPresencas, updatedNotifications
+      );
+      return { success: false, message: 'A presença deste grupo já foi enviada para esta data.' };
+    }
+
+    const now = new Date();
+    const horaEnvio = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const createdAt = now.toISOString();
+    const newRecords: PresencaApontamento[] = items.map(item => {
+      const funcionario = funcionarios.find(func => func.id === item.funcionarioId);
+      return {
+        id: `plink-${grupo.id}-${item.funcionarioId}-${data}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        data,
+        horaEnvio,
+        grupoId: grupo.id,
+        grupoNome: grupo.nome,
+        responsavel: grupo.responsavel,
+        frenteServico: grupo.frenteServico,
+        funcionarioId: item.funcionarioId,
+        funcionarioNome: funcionario?.nome || item.funcionarioId,
+        funcao: funcionario?.cargo || '',
+        status: item.status,
+        observacao: item.observacao,
+        tokenUsado: grupo.token,
+        createdAt
+      };
+    });
+
+    const updatedPresencas = [...presencasLink, ...newRecords];
+    setPresencasLink(updatedPresencas);
+    localStorage.setItem('renea_presencas_link', JSON.stringify(updatedPresencas));
+
+    const logMessage = `O grupo ${grupo.nome} enviou a presença do dia ${data} às ${horaEnvio}.`;
+    const newLog: HistoryLog = {
+      id: `log-pres-${Date.now()}`,
+      timestamp: new Date().toLocaleString('pt-BR'),
+      usuario: grupo.responsavel,
+      acao: 'Criou',
+      tela: 'Controle de Presença',
+      descricao: logMessage
+    };
+    const updatedHistory = [newLog, ...historyLogs];
+    setHistoryLogs(updatedHistory);
+    localStorage.setItem('renea_history_logs', JSON.stringify(updatedHistory));
+
+    const absentCount = newRecords.filter(item => item.status === 'Ausente').length;
+    const notificationsToAdd: AppNotification[] = [
+      createPresenceNotification('Presença enviada', logMessage, 'success')
+    ];
+    if (absentCount > 0) {
+      notificationsToAdd.push(createPresenceNotification(
+        'Funcionário ausente',
+        `${absentCount} funcionário(s) foram marcados como ausentes no grupo ${grupo.nome}.`,
+        'warning'
+      ));
+    }
+    if (absentCount >= 3 || (newRecords.length > 0 && absentCount / newRecords.length >= 0.3)) {
+      notificationsToAdd.push(createPresenceNotification(
+        'Muitas ausências',
+        `O grupo ${grupo.nome} registrou volume elevado de ausências.`,
+        'warning'
+      ));
+    }
+    if (horaEnvio < '06:00' || horaEnvio > '09:00') {
+      notificationsToAdd.push(createPresenceNotification(
+        'Envio fora do horário',
+        `O grupo ${grupo.nome} enviou presença às ${horaEnvio}.`,
+        'warning'
+      ));
+    }
+
+    const updatedNotifications = persistPresenceNotifications(notificationsToAdd);
+    const syncResult = await handleUploadToFirebase(
+      empresas, obras, equipamentos, funcionarios, comboios, combustiveis, lubrificantes, etapas,
+      abastecimentos, lubrificacoes, rdos, updatedHistory, listasPresenca, ordensServico,
+      gruposEquipe, updatedPresencas, historicoPresencas, updatedNotifications
+    );
+
+    return {
+      success: true,
+      message: syncResult.success
+        ? 'Presença enviada e sincronizada com sucesso.'
+        : 'Presença salva neste dispositivo. A sincronização Firebase não respondeu agora.'
+    };
+  };
+
+  const handleUpdatePresencaLink = (id: string, status: PresencaStatus, observacao: string, motivo: string) => {
+    const item = presencasLink.find(row => row.id === id);
+    if (!item) return;
+
+    const updatedItem: PresencaApontamento = {
+      ...item,
+      status,
+      observacao,
+      updatedAt: new Date().toISOString(),
+      atualizadoPor: 'admin',
+      motivoAlteracao: motivo
+    };
+    const updatedPresencas = presencasLink.map(row => row.id === id ? updatedItem : row);
+    const historico: HistoricoPresenca = {
+      id: `hist-pres-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      presencaId: id,
+      grupoId: item.grupoId,
+      funcionarioId: item.funcionarioId,
+      data: item.data,
+      editadoPor: 'admin',
+      editadoEm: new Date().toLocaleString('pt-BR'),
+      motivo,
+      valorAnterior: `${item.status}${item.observacao ? ` - ${item.observacao}` : ''}`,
+      valorNovo: `${status}${observacao ? ` - ${observacao}` : ''}`
+    };
+    const updatedHistorico = [historico, ...historicoPresencas];
+    const updatedNotifications = persistPresenceNotifications([
+      createPresenceNotification(
+        'Presença atualizada',
+        `Admin atualizou ${item.funcionarioNome} no grupo ${item.grupoNome}.`,
+        'info'
+      )
+    ]);
+
+    setPresencasLink(updatedPresencas);
+    setHistoricoPresencas(updatedHistorico);
+    localStorage.setItem('renea_presencas_link', JSON.stringify(updatedPresencas));
+    localStorage.setItem('renea_historico_presencas', JSON.stringify(updatedHistorico));
+
+    handleUploadToFirebase(
+      empresas, obras, equipamentos, funcionarios, comboios, combustiveis, lubrificantes, etapas,
+      abastecimentos, lubrificacoes, rdos, historyLogs, listasPresenca, ordensServico,
+      gruposEquipe, updatedPresencas, updatedHistorico, updatedNotifications
+    );
+  };
+
 
   // Administration helpers
   const handleImportData = (imported: {
@@ -942,6 +1274,10 @@ export default function App() {
     rdos: RdoDiario[];
     listasPresenca?: ListaPresenca[];
     ordensServico?: OrdemServico[];
+    gruposEquipe?: GrupoEquipe[];
+    presencasLink?: PresencaApontamento[];
+    historicoPresencas?: HistoricoPresenca[];
+    notifications?: AppNotification[];
     historyLogs?: HistoryLog[];
   }) => {
     setEmpresas(imported.empresas || []);
@@ -957,6 +1293,10 @@ export default function App() {
     setRdos(imported.rdos || []);
     setListasPresenca(imported.listasPresenca || []);
     setOrdensServico(imported.ordensServico || []);
+    setGruposEquipe(imported.gruposEquipe || []);
+    setPresencasLink(imported.presencasLink || []);
+    setHistoricoPresencas(imported.historicoPresencas || []);
+    setNotifications(imported.notifications || []);
     
     const logs = imported.historyLogs || [{
       id: `log-${Date.now()}`,
@@ -981,6 +1321,10 @@ export default function App() {
     localStorage.setItem('renea_rdos', JSON.stringify(imported.rdos || []));
     localStorage.setItem('renea_listas_presenca', JSON.stringify(imported.listasPresenca || []));
     localStorage.setItem('renea_ordens_servico', JSON.stringify(imported.ordensServico || []));
+    localStorage.setItem('renea_grupos_equipes', JSON.stringify(imported.gruposEquipe || []));
+    localStorage.setItem('renea_presencas_link', JSON.stringify(imported.presencasLink || []));
+    localStorage.setItem('renea_historico_presencas', JSON.stringify(imported.historicoPresencas || []));
+    localStorage.setItem('renea_notifications', JSON.stringify(imported.notifications || []));
     localStorage.setItem('renea_history_logs', JSON.stringify(logs));
   };
 
@@ -998,6 +1342,9 @@ export default function App() {
     setRdos(INITIAL_RDOS);
     setListasPresenca(INITIAL_PRESENCAS);
     setOrdensServico(INITIAL_ORDENS_SERVICO);
+    setGruposEquipe(INITIAL_GRUPOS_EQUIPES);
+    setPresencasLink(INITIAL_PRESENCAS_LINK);
+    setHistoricoPresencas(INITIAL_HISTORICO_PRESENCAS);
     setHistoryLogs(INITIAL_HISTORY_LOGS);
 
     localStorage.setItem('renea_empresas', JSON.stringify(INITIAL_EMPRESAS));
@@ -1013,7 +1360,11 @@ export default function App() {
     localStorage.setItem('renea_rdos', JSON.stringify(INITIAL_RDOS));
     localStorage.setItem('renea_listas_presenca', JSON.stringify(INITIAL_PRESENCAS));
     localStorage.setItem('renea_ordens_servico', JSON.stringify(INITIAL_ORDENS_SERVICO));
+    localStorage.setItem('renea_grupos_equipes', JSON.stringify(INITIAL_GRUPOS_EQUIPES));
+    localStorage.setItem('renea_presencas_link', JSON.stringify(INITIAL_PRESENCAS_LINK));
+    localStorage.setItem('renea_historico_presencas', JSON.stringify(INITIAL_HISTORICO_PRESENCAS));
     localStorage.setItem('renea_history_logs', JSON.stringify(INITIAL_HISTORY_LOGS));
+    localStorage.setItem('renea_colaboradores_planilha_v1', 'true');
   };
 
   const handleClearData = () => {
@@ -1030,6 +1381,9 @@ export default function App() {
     setRdos([]);
     setListasPresenca([]);
     setOrdensServico([]);
+    setGruposEquipe([]);
+    setPresencasLink([]);
+    setHistoricoPresencas([]);
     setHistoryLogs([{
       id: `log-${Date.now()}`,
       timestamp: new Date().toLocaleString('pt-BR'),
@@ -1052,6 +1406,9 @@ export default function App() {
     localStorage.setItem('renea_rdos', JSON.stringify([]));
     localStorage.setItem('renea_listas_presenca', JSON.stringify([]));
     localStorage.setItem('renea_ordens_servico', JSON.stringify([]));
+    localStorage.setItem('renea_grupos_equipes', JSON.stringify([]));
+    localStorage.setItem('renea_presencas_link', JSON.stringify([]));
+    localStorage.setItem('renea_historico_presencas', JSON.stringify([]));
     localStorage.setItem('renea_history_logs', JSON.stringify([]));
   };
 
@@ -1070,6 +1427,10 @@ export default function App() {
       rdos,
       listasPresenca,
       ordensServico,
+      gruposEquipe,
+      presencasLink,
+      historicoPresencas,
+      notifications,
       historyLogs
     }, null, 2);
   };
@@ -1124,6 +1485,8 @@ export default function App() {
       const newCombustiveis = mergeById(combustiveis, parsed.combustiveis);
       const newLubrificantes = mergeById(lubrificantes, parsed.lubrificantes);
       const newEtapas = mergeById(etapas, parsed.etapas);
+      const newGruposEquipe = mergeById(gruposEquipe, parsed.gruposEquipe);
+      const newHistoricoPresencas = mergeById(historicoPresencas, parsed.historicoPresencas);
 
       // Registros datados: só entram os que caem dentro do período escolhido
       const incomingAbastecimentos = (parsed.abastecimentos || []).filter((x: Abastecimento) => inRange(x.data));
@@ -1131,12 +1494,14 @@ export default function App() {
       const incomingRdos = (parsed.rdos || []).filter((x: RdoDiario) => inRange(x.data));
       const incomingPresencas = (parsed.listasPresenca || []).filter((x: ListaPresenca) => inRange(x.data));
       const incomingOrdensServico = (parsed.ordensServico || []).filter((x: OrdemServico) => inRange(x.dataAbertura));
+      const incomingPresencasLink = (parsed.presencasLink || []).filter((x: PresencaApontamento) => inRange(x.data));
 
       const newAbastecimentos = mergeById(abastecimentos, incomingAbastecimentos);
       const newLubrificacoes = mergeById(lubrificacoes, incomingLubrificacoes);
       const newRdos = mergeById(rdos, incomingRdos);
       const newListasPresenca = mergeById(listasPresenca, incomingPresencas);
       const newOrdensServico = mergeById(ordensServico, incomingOrdensServico);
+      const newPresencasLink = mergeById(presencasLink, incomingPresencasLink);
 
       setEmpresas(newEmpresas); localStorage.setItem('renea_empresas', JSON.stringify(newEmpresas));
       setObras(newObras); localStorage.setItem('renea_obras', JSON.stringify(newObras));
@@ -1151,8 +1516,11 @@ export default function App() {
       setRdos(newRdos); localStorage.setItem('renea_rdos', JSON.stringify(newRdos));
       setListasPresenca(newListasPresenca); localStorage.setItem('renea_listas_presenca', JSON.stringify(newListasPresenca));
       setOrdensServico(newOrdensServico); localStorage.setItem('renea_ordens_servico', JSON.stringify(newOrdensServico));
+      setGruposEquipe(newGruposEquipe); localStorage.setItem('renea_grupos_equipes', JSON.stringify(newGruposEquipe));
+      setPresencasLink(newPresencasLink); localStorage.setItem('renea_presencas_link', JSON.stringify(newPresencasLink));
+      setHistoricoPresencas(newHistoricoPresencas); localStorage.setItem('renea_historico_presencas', JSON.stringify(newHistoricoPresencas));
 
-      const totalImportados = incomingAbastecimentos.length + incomingLubrificacoes.length + incomingRdos.length + incomingPresencas.length + incomingOrdensServico.length;
+      const totalImportados = incomingAbastecimentos.length + incomingLubrificacoes.length + incomingRdos.length + incomingPresencas.length + incomingOrdensServico.length + incomingPresencasLink.length;
       const logMsg = `Importou seletivamente ${totalImportados} registro(s) datado(s) entre ${dataInicio || 'início'} e ${dataFim || 'fim'}, além dos cadastros base.`;
       const newLog: HistoryLog = {
         id: `log-${Date.now()}`,
@@ -1173,6 +1541,20 @@ export default function App() {
       return { success: false, message: 'Falha ao ler ou processar o arquivo de backup.' };
     }
   };
+
+  if (externalPresenceToken) {
+    return (
+      <PresencaLinkExterno
+        token={externalPresenceToken}
+        gruposEquipe={gruposEquipe}
+        funcionarios={funcionarios}
+        obras={obras}
+        presencasLink={presencasLink}
+        isLoadingCloud={isExternalPresenceLoading}
+        onSubmitPresenca={handleSubmitPresencaLink}
+      />
+    );
+  }
 
   // Login Screen Render
   if (!isLoggedIn) {
@@ -1319,6 +1701,14 @@ export default function App() {
             Presença
           </button>
 
+          <button
+            onClick={() => setActiveTab('controle-presenca')}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'controle-presenca' ? 'bg-emerald-600/15 text-emerald-400 border-l-4 border-emerald-500 pl-3' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-100'}`}
+          >
+            <ShieldCheck className="w-4 h-4 shrink-0" />
+            Controle de Presença
+          </button>
+
           <button 
             onClick={() => setActiveTab('manutencao')}
             className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'manutencao' ? 'bg-emerald-600/15 text-emerald-400 border-l-4 border-emerald-500 pl-3' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-100'}`}
@@ -1456,6 +1846,13 @@ export default function App() {
                 className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'presenca' ? 'bg-emerald-600/15 text-emerald-400' : 'text-slate-400 hover:bg-slate-800'}`}
               >
                 <Users className="w-4.5 h-4.5" /> Presença
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('controle-presenca'); setIsMobileMenuOpen(false); }}
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'controle-presenca' ? 'bg-emerald-600/15 text-emerald-400' : 'text-slate-400 hover:bg-slate-800'}`}
+              >
+                <ShieldCheck className="w-4.5 h-4.5" /> Controle de Presença
               </button>
 
               <button 
@@ -1712,6 +2109,20 @@ export default function App() {
                 listasPresenca={listasPresenca}
                 onSaveListaPresenca={handleSaveListaPresenca}
                 onDeleteListaPresenca={handleDeleteListaPresenca}
+              />
+            )}
+
+            {activeTab === 'controle-presenca' && (
+              <ControlePresencaTab
+                funcionarios={funcionarios}
+                obras={obras}
+                gruposEquipe={gruposEquipe}
+                presencasLink={presencasLink}
+                historicoPresencas={historicoPresencas}
+                onSaveGrupoEquipe={handleSaveGrupoEquipe}
+                onDeleteGrupoEquipe={handleDeleteGrupoEquipe}
+                onUpdatePresencaLink={handleUpdatePresencaLink}
+                onRefreshFromFirebase={handleDownloadFromFirebase}
               />
             )}
 
