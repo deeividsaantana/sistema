@@ -49,7 +49,7 @@ import ManutencaoEquipamentosTab from './components/ManutencaoEquipamentosTab';
 
 // Motion and Logo Import
 import { motion, AnimatePresence } from 'motion/react';
-import reneaLogo from './assets/images/renea_eagle_logo_1782558342785.jpg';
+import reneaLogo from './assets/images/renea_logo_new.png';
 
 // Firebase Imports
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -1189,7 +1189,7 @@ export default function App() {
               <img 
                 src={reneaLogo} 
                 alt="RENEA Logo" 
-                className="w-full h-full object-cover animate-pulse"
+                className="w-full h-full object-contain p-1.5 animate-pulse"
                 referrerPolicy="no-referrer"
               />
             </div>
@@ -1275,7 +1275,7 @@ export default function App() {
             <img 
               src={reneaLogo} 
               alt="RENEA Logo" 
-              className="w-full h-full object-cover" 
+              className="w-full h-full object-contain p-1" 
               referrerPolicy="no-referrer" 
             />
           </div>
@@ -1379,7 +1379,7 @@ export default function App() {
             <img 
               src={reneaLogo} 
               alt="RENEA Logo" 
-              className="w-full h-full object-cover" 
+              className="w-full h-full object-contain p-1" 
               referrerPolicy="no-referrer" 
             />
           </div>
