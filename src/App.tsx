@@ -81,35 +81,9 @@ import {
 
 import { AppNotification } from './types';
 
-const getInitialNotifications = (): AppNotification[] => [
-  {
-    id: 'notif-1',
-    type: 'success',
-    title: 'Integração Estabelecida',
-    message: 'Canal de escuta ativa e websocket conectado com dynamic-manatee-66561d.netlify.app.',
-    timestamp: '08:30',
-    read: true,
-    source: 'Netlify App'
-  },
-  {
-    id: 'notif-2',
-    type: 'warning',
-    title: 'Falta Registrada - Netlify',
-    message: 'O gredista ADEMAR FERREIRA DA CRUZ foi marcado como AUSENTE na obra Duplicação BR-101.',
-    timestamp: '08:45',
-    read: false,
-    source: 'Netlify App'
-  },
-  {
-    id: 'notif-3',
-    type: 'info',
-    title: 'Frota em Sincronia',
-    message: 'Todas as frotas e canteiros foram sincronizados com o banco de dados principal.',
-    timestamp: '09:00',
-    read: true,
-    source: 'Sistema Local'
-  }
-];
+// Notificações reais começam vazias. Elas são preenchidas apenas por ações
+// genuínas do usuário (cadastros, edições, sincronizações com o Firebase etc.)
+const getInitialNotifications = (): AppNotification[] => [];
 
 export default function App() {
   // Login State
@@ -385,6 +359,14 @@ export default function App() {
     const updatedHistory = [newLog, ...newHistoryList];
     setHistoryLogs(updatedHistory);
     localStorage.setItem('renea_history_logs', JSON.stringify(updatedHistory));
+
+    // Notificação real (não simulada) refletindo a ação que de fato aconteceu
+    addNotification(
+      `${tableName} — ${action}`,
+      description,
+      action === 'Excluiu' ? 'warning' : 'success',
+      'Sistema Local'
+    );
 
     // Handle background cloud sync if Auto Sync is active
     if (localStorage.getItem('renea_auto_sync') === 'true') {
@@ -889,214 +871,6 @@ export default function App() {
     }, 6000);
   };
 
-  const simulateNetlifyEvent = () => {
-    if (funcionarios.length === 0 || obras.length === 0 || equipamentos.length === 0) return;
-
-    // Pick between a worker registration or an equipment status change
-    const rand = Math.random();
-
-    if (rand < 0.5) {
-      // 1. Worker attendance change
-      const activeFuncs = funcionarios.filter(f => f.ativo);
-      if (activeFuncs.length === 0) return;
-      const randomFunc = activeFuncs[Math.floor(Math.random() * activeFuncs.length)];
-      const randomObra = obras[Math.floor(Math.random() * obras.length)];
-      const isPresent = Math.random() > 0.25; // 75% present, 25% absent
-      const dateStr = new Date().toISOString().split('T')[0];
-
-      // Add as a synced ListaPresenca
-      const syncedList: ListaPresenca = {
-        id: `synced-bg-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        data: dateStr,
-        obraId: randomObra.id,
-        responsavel: 'Encarregado Celular',
-        funcionarios: [
-          {
-            funcionarioId: randomFunc.id,
-            presente: isPresent,
-            observacao: !isPresent ? (Math.random() > 0.5 ? 'Atestado Médico apresentado' : 'Falta injustificada') : 'Registrado via Netlify Mobile'
-          }
-        ],
-        observacoes: `Apontamento em tempo real recebido via celular do encarregado para a obra ${randomObra.nome}.`
-      };
-
-      setListasPresenca(prev => {
-        const updated = [...prev, syncedList];
-        localStorage.setItem('renea_listas_presenca', JSON.stringify(updated));
-        return updated;
-      });
-
-      // Notify
-      if (isPresent) {
-        addNotification(
-          'Presença Registrada',
-          `O funcionário ${randomFunc.nome} (${randomFunc.cargo}) registrou presença na obra "${randomObra.nome}".`,
-          'success',
-          'Netlify App'
-        );
-      } else {
-        const typeOfAbsence = Math.random() > 0.5 ? 'Atestado Médico' : 'Ausência sem justificativa';
-        addNotification(
-          `Falta Registrada - ${randomFunc.cargo}`,
-          `O funcionário ${randomFunc.nome} foi registrado como AUSENTE na obra "${randomObra.nome}". Motivo: ${typeOfAbsence}.`,
-          'warning',
-          'Netlify App'
-        );
-      }
-
-      // Add to audit trail log
-      const logMsg = `Sincronizou presença de "${randomFunc.nome}" (${isPresent ? 'Presente' : 'Ausente'}) via Netlify App na obra "${randomObra.nome}".`;
-      const newLog: HistoryLog = {
-        id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        timestamp: new Date().toLocaleString('pt-BR'),
-        usuario: 'Encarregado Netlify',
-        acao: 'Criou',
-        tela: 'Manutenção',
-        descricao: logMsg
-      };
-      setHistoryLogs(prev => {
-        const updated = [newLog, ...prev];
-        localStorage.setItem('renea_history_logs', JSON.stringify(updated));
-        return updated;
-      });
-
-    } else {
-      // 2. Equipment maintenance / stopped status change
-      const randomEquip = equipamentos[Math.floor(Math.random() * equipamentos.length)];
-      const randomObra = obras[Math.floor(Math.random() * obras.length)];
-      
-      const statusOptions: ('Ativo' | 'Parado' | 'Manutenção' | 'Esperando motorista')[] = ['Parado', 'Manutenção', 'Esperando motorista', 'Ativo'];
-      const nextStatus = statusOptions[Math.floor(Math.random() * statusOptions.length)];
-
-      if (randomEquip.status !== nextStatus) {
-        const prevStatus = randomEquip.status;
-        const updatedEquip: Equipamento = {
-          ...randomEquip,
-          status: nextStatus,
-          localAtualId: randomObra.id
-        };
-
-        setEquipamentos(prev => {
-          const updated = prev.map(e => e.id === randomEquip.id ? updatedEquip : e);
-          localStorage.setItem('renea_equipamentos', JSON.stringify(updated));
-          return updated;
-        });
-
-        // Notify
-        if (nextStatus === 'Manutenção') {
-          addNotification(
-            'Entrada em Manutenção',
-            `O equipamento ${randomEquip.prefixo} (${randomEquip.nome}) foi marcado como EM MANUTENÇÃO corretiva na obra "${randomObra.nome}".`,
-            'error',
-            'Netlify App'
-          );
-        } else if (nextStatus === 'Parado') {
-          addNotification(
-            'Frota Parada Registrada',
-            `O equipamento ${randomEquip.prefixo} (${randomEquip.nome}) foi registrado como PARADO por ociosidade ou chuva na obra "${randomObra.nome}".`,
-            'warning',
-            'Netlify App'
-          );
-        } else if (nextStatus === 'Ativo') {
-          addNotification(
-            'Frota Liberada',
-            `O equipamento ${randomEquip.prefixo} (${randomEquip.nome}) foi LIBERADO e está operando como ATIVO na obra "${randomObra.nome}".`,
-            'success',
-            'Netlify App'
-          );
-        } else {
-          addNotification(
-            'Aguardando Operador',
-            `O equipamento ${randomEquip.prefixo} (${randomEquip.nome}) está aguardando motorista/operador na obra "${randomObra.nome}".`,
-            'info',
-            'Netlify App'
-          );
-        }
-
-        // Add to audit trail log
-        const logMsg = `Alterou status do equipamento ${randomEquip.prefixo} de "${prevStatus}" para "${nextStatus}" via Netlify Real-Time.`;
-        const newLog: HistoryLog = {
-          id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          timestamp: new Date().toLocaleString('pt-BR'),
-          usuario: 'Supervisor Oficina',
-          acao: 'Editou',
-          tela: 'Frota',
-          descricao: logMsg
-        };
-        setHistoryLogs(prev => {
-          const updated = [newLog, ...prev];
-          localStorage.setItem('renea_history_logs', JSON.stringify(updated));
-          return updated;
-        });
-      }
-    }
-  };
-
-  // Background interval for Netlify live simulation
-  useEffect(() => {
-    // Initial establish websocket log notification after 8 seconds
-    const startupTimeout = setTimeout(() => {
-      addNotification(
-        'Link de Integração Conectado',
-        'Canal websocket estabelecido em tempo real com dynamic-manatee-66561d.netlify.app.',
-        'success',
-        'Netlify App'
-      );
-    }, 8000);
-
-    // Dynamic simulation every 55 seconds
-    const interval = setInterval(() => {
-      simulateNetlifyEvent();
-    }, 55000);
-
-    return () => {
-      clearTimeout(startupTimeout);
-      clearInterval(interval);
-    };
-  }, [funcionarios, obras, equipamentos]);
-
-  // Listen to postMessages from the Netlify iframe
-  useEffect(() => {
-    const handleIframeMessage = (e: MessageEvent) => {
-      if (e.origin && (e.origin.includes('dynamic-manatee-66561d.netlify.app') || e.origin.includes('netlify.app'))) {
-        console.log("Mensagem recebida do Netlify iframe:", e.data);
-        try {
-          const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-          if (data) {
-            if (data.type === 'attendance_submitted' || data.action === 'presence_created' || data.type === 'PRESENCE_ADDED') {
-              addNotification(
-                'Presença Sincronizada',
-                'Uma nova folha de presença foi lançada no Netlify e integrada com sucesso ao seu painel.',
-                'success',
-                'Netlify App'
-              );
-              simulateNetlifyEvent();
-            } else if (data.type === 'equipment_stopped' || data.type === 'maintenance_reported') {
-              addNotification(
-                'Alerta de Frota Remoto',
-                'Um encarregado emitiu um status de equipamento parado/manutenção via celular.',
-                'warning',
-                'Netlify App'
-              );
-              simulateNetlifyEvent();
-            }
-          }
-        } catch (err) {
-          // General notice
-          addNotification(
-            'Sincronização Real-Time',
-            'Ação ou clique sincronizado com dynamic-manatee-66561d.netlify.app.',
-            'info',
-            'Netlify App'
-          );
-        }
-      }
-    };
-
-    window.addEventListener('message', handleIframeMessage);
-    return () => window.removeEventListener('message', handleIframeMessage);
-  }, [funcionarios, obras, equipamentos]);
-
 
   // Administration helpers
   const handleImportData = (imported: {
@@ -1250,6 +1024,87 @@ export default function App() {
       return true;
     } catch (e) {
       return false;
+    }
+  };
+
+  // Importação seletiva: o usuário escolhe exatamente o período (data início/fim)
+  // que deseja importar do arquivo de backup. Registros com data (abastecimentos,
+  // lubrificações, RDOs e listas de presença) fora do intervalo são ignorados.
+  // Cadastros sem data (empresas, equipamentos, funcionários, etc.) são mesclados
+  // por ID, sem apagar o que já existe no sistema.
+  const handleImportFilteredByDate = (
+    importedJson: string,
+    dataInicio: string,
+    dataFim: string
+  ): { success: boolean; message: string } => {
+    try {
+      const parsed = JSON.parse(importedJson);
+      if (!parsed || typeof parsed !== 'object') {
+        return { success: false, message: 'Arquivo de backup inválido.' };
+      }
+
+      const inRange = (data: string) => (!dataInicio || data >= dataInicio) && (!dataFim || data <= dataFim);
+
+      const mergeById = <T extends { id: string }>(current: T[], incoming: T[] | undefined): T[] => {
+        if (!incoming || incoming.length === 0) return current;
+        const map = new Map(current.map(item => [item.id, item]));
+        incoming.forEach(item => map.set(item.id, item));
+        return Array.from(map.values());
+      };
+
+      // Cadastros base mesclados por ID (não são datados, então são sempre importados)
+      const newEmpresas = mergeById(empresas, parsed.empresas);
+      const newObras = mergeById(obras, parsed.obras);
+      const newEquipamentos = mergeById(equipamentos, parsed.equipamentos);
+      const newFuncionarios = mergeById(funcionarios, parsed.funcionarios);
+      const newComboios = mergeById(comboios, parsed.comboios);
+      const newCombustiveis = mergeById(combustiveis, parsed.combustiveis);
+      const newLubrificantes = mergeById(lubrificantes, parsed.lubrificantes);
+      const newEtapas = mergeById(etapas, parsed.etapas);
+
+      // Registros datados: só entram os que caem dentro do período escolhido
+      const incomingAbastecimentos = (parsed.abastecimentos || []).filter((x: Abastecimento) => inRange(x.data));
+      const incomingLubrificacoes = (parsed.lubrificacoes || []).filter((x: Lubrificacao) => inRange(x.data));
+      const incomingRdos = (parsed.rdos || []).filter((x: RdoDiario) => inRange(x.data));
+      const incomingPresencas = (parsed.listasPresenca || []).filter((x: ListaPresenca) => inRange(x.data));
+
+      const newAbastecimentos = mergeById(abastecimentos, incomingAbastecimentos);
+      const newLubrificacoes = mergeById(lubrificacoes, incomingLubrificacoes);
+      const newRdos = mergeById(rdos, incomingRdos);
+      const newListasPresenca = mergeById(listasPresenca, incomingPresencas);
+
+      setEmpresas(newEmpresas); localStorage.setItem('renea_empresas', JSON.stringify(newEmpresas));
+      setObras(newObras); localStorage.setItem('renea_obras', JSON.stringify(newObras));
+      setEquipamentos(newEquipamentos); localStorage.setItem('renea_equipamentos', JSON.stringify(newEquipamentos));
+      setFuncionarios(newFuncionarios); localStorage.setItem('renea_funcionarios', JSON.stringify(newFuncionarios));
+      setComboios(newComboios); localStorage.setItem('renea_comboios', JSON.stringify(newComboios));
+      setCombustiveis(newCombustiveis); localStorage.setItem('renea_combustiveis', JSON.stringify(newCombustiveis));
+      setLubrificantes(newLubrificantes); localStorage.setItem('renea_lubrificantes', JSON.stringify(newLubrificantes));
+      setEtapas(newEtapas); localStorage.setItem('renea_etapas', JSON.stringify(newEtapas));
+      setAbastecimentos(newAbastecimentos); localStorage.setItem('renea_abastecimentos', JSON.stringify(newAbastecimentos));
+      setLubrificacoes(newLubrificacoes); localStorage.setItem('renea_lubrificacoes', JSON.stringify(newLubrificacoes));
+      setRdos(newRdos); localStorage.setItem('renea_rdos', JSON.stringify(newRdos));
+      setListasPresenca(newListasPresenca); localStorage.setItem('renea_listas_presenca', JSON.stringify(newListasPresenca));
+
+      const totalImportados = incomingAbastecimentos.length + incomingLubrificacoes.length + incomingRdos.length + incomingPresencas.length;
+      const logMsg = `Importou seletivamente ${totalImportados} registro(s) datado(s) entre ${dataInicio || 'início'} e ${dataFim || 'fim'}, além dos cadastros base.`;
+      const newLog: HistoryLog = {
+        id: `log-${Date.now()}`,
+        timestamp: new Date().toLocaleString('pt-BR'),
+        usuario: 'admin',
+        acao: 'Criou',
+        tela: 'Banco de Dados',
+        descricao: logMsg
+      };
+      const updatedHistory = [newLog, ...historyLogs];
+      setHistoryLogs(updatedHistory);
+      localStorage.setItem('renea_history_logs', JSON.stringify(updatedHistory));
+
+      addNotification('Importação por Período Concluída', logMsg, 'success', 'Sistema Local');
+
+      return { success: true, message: `Importação concluída! ${totalImportados} registro(s) do período selecionado foram adicionados/atualizados.` };
+    } catch (e) {
+      return { success: false, message: 'Falha ao ler ou processar o arquivo de backup.' };
     }
   };
 
@@ -1629,7 +1484,7 @@ export default function App() {
                         <div className="py-10 text-center flex flex-col items-center justify-center text-slate-500">
                           <Bell className="w-7 h-7 text-slate-700 mb-1.5" />
                           <p className="text-[11px] italic">Sem alertas recentes</p>
-                          <p className="text-[9px] text-slate-600 mt-1 max-w-[200px]">Os cadastros realizados no Netlify aparecerão aqui em tempo real.</p>
+                          <p className="text-[9px] text-slate-600 mt-1 max-w-[200px]">Alertas de cadastros, edições e sincronizações aparecerão aqui.</p>
                         </div>
                       ) : (
                         notifications.map(n => {
@@ -1670,20 +1525,6 @@ export default function App() {
                           );
                         })
                       )}
-                    </div>
-
-                    <div className="border-t border-slate-800 pt-2.5">
-                      <button 
-                        onClick={() => {
-                          simulateNetlifyEvent();
-                        }}
-                        className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[10px] rounded-lg tracking-wider uppercase flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                      >
-                        ⚡ Forçar Cadastro Netlify
-                      </button>
-                      <p className="text-[8px] text-slate-500 text-center mt-1.5 font-mono">
-                        Simula um encarregado lançando frotas paradas ou presença no Netlify.
-                      </p>
                     </div>
                   </div>
                 </>
@@ -1814,6 +1655,7 @@ export default function App() {
                 onResetToDefault={handleResetData}
                 onClearAllData={handleClearData}
                 onImportFullData={handleImportFullData}
+                onImportFilteredByDate={handleImportFilteredByDate}
                 onExportFullData={handleExportFullData}
                 isFirebaseConnected={isFirebaseConnected}
                 isAutoSyncEnabled={isAutoSyncEnabled}
