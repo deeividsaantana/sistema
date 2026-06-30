@@ -31,6 +31,9 @@ export interface Equipamento {
   status: 'Ativo' | 'Parado' | 'Manutenção' | 'Mobilizado' | 'Desmobilizado' | 'Esperando motorista';
   localAtualId: string; // Obra/local atual
   observacao: string;
+  foto?: string; // Imagem do equipamento em base64 (data URL)
+  horasDisponiveis?: number; // Horas que o equipamento ficou disponível para operar no período
+  horasIndisponiveis?: number; // Horas que o equipamento ficou indisponível (quebrado/manutenção) no período
 }
 
 export interface Funcionario {
