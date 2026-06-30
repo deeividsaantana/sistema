@@ -1646,6 +1646,7 @@ export default function App() {
                 abastecimentos={abastecimentos}
                 lubrificacoes={lubrificacoes}
                 rdos={rdos}
+                listasPresenca={listasPresenca}
               />
             )}
 
