@@ -96,6 +96,7 @@ export default function RelatoriosTab({
   const [filtroResponsavel, setFiltroResponsavel] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('');
   const [filtroEtapaId, setFiltroEtapaId] = useState('');
+  const [fuelSort, setFuelSort] = useState<'data_desc' | 'litros_desc' | 'litros_asc'>('litros_desc');
 
   // Run the report filtering logic
   const getFilteredData = () => {
@@ -146,7 +147,13 @@ export default function RelatoriosTab({
           linha.produtos[produtoNome] = (linha.produtos[produtoNome] || 0) + lub.quantidade;
         });
 
-        return Object.values(grouped).sort((a, b) => a.eq.prefixo.localeCompare(b.eq.prefixo));
+        return Object.values(grouped).sort((a, b) => {
+          const totalA = Object.values(a.produtos).reduce((sum, value) => sum + value, 0);
+          const totalB = Object.values(b.produtos).reduce((sum, value) => sum + value, 0);
+          if (fuelSort === 'litros_desc') return totalB - totalA || a.eq.prefixo.localeCompare(b.eq.prefixo);
+          if (fuelSort === 'litros_asc') return totalA - totalB || a.eq.prefixo.localeCompare(b.eq.prefixo);
+          return a.eq.prefixo.localeCompare(b.eq.prefixo);
+        });
       }
 
       case 'consumo_empresa': {
@@ -173,7 +180,10 @@ export default function RelatoriosTab({
           grouped[cName].countAbas += 1;
         });
 
-        return Object.values(grouped).sort((a,b) => b.liters - a.liters);
+        return Object.values(grouped).sort((a,b) => {
+          if (fuelSort === 'litros_asc') return a.liters - b.liters;
+          return b.liters - a.liters;
+        });
       }
 
       case 'consumo_periodo': {
@@ -193,7 +203,11 @@ export default function RelatoriosTab({
             if (filtroEmpresaId || filtroEquipamentoId || filtroObraId) return false;
           }
           return true;
-        }).sort((a,b) => b.data.localeCompare(a.data));
+        }).sort((a,b) => {
+          if (fuelSort === 'litros_desc') return b.quantidadeLitros - a.quantidadeLitros || b.data.localeCompare(a.data);
+          if (fuelSort === 'litros_asc') return a.quantidadeLitros - b.quantidadeLitros || b.data.localeCompare(a.data);
+          return b.data.localeCompare(a.data) || b.hora.localeCompare(a.hora);
+        });
       }
 
       case 'lubrificacao_frota': {
@@ -1044,15 +1058,25 @@ export default function RelatoriosTab({
 
               {/* Conditional fuel filter */}
               {['consumo_frota', 'consumo_empresa', 'consumo_periodo'].includes(reportType) && (
-                <div className="space-y-1">
-                  <label className="text-xxs font-bold uppercase tracking-wider text-slate-500">Insumo Combustível</label>
-                  <select value={filtroCombustivelId} onChange={e => setFiltroCombustivelId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 cursor-pointer">
-                    <option value="">Todos</option>
-                    {combustiveis.map(tc => (
-                      <option key={tc.id} value={tc.id} className="bg-slate-900 text-slate-200">{tc.nome}</option>
-                    ))}
-                  </select>
-                </div>
+                <>
+                  <div className="space-y-1">
+                    <label className="text-xxs font-bold uppercase tracking-wider text-slate-500">Insumo Combustível</label>
+                    <select value={filtroCombustivelId} onChange={e => setFiltroCombustivelId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 cursor-pointer">
+                      <option value="">Todos</option>
+                      {combustiveis.map(tc => (
+                        <option key={tc.id} value={tc.id} className="bg-slate-900 text-slate-200">{tc.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xxs font-bold uppercase tracking-wider text-slate-500">Ordenar abastecimento</label>
+                    <select value={fuelSort} onChange={e => setFuelSort(e.target.value as 'data_desc' | 'litros_desc' | 'litros_asc')} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 cursor-pointer">
+                      <option value="litros_desc">Maior volume para menor</option>
+                      <option value="litros_asc">Menor volume para maior</option>
+                      <option value="data_desc">Mais recentes primeiro</option>
+                    </select>
+                  </div>
+                </>
               )}
 
               {/* Conditional operator / technical filter */}
