@@ -82,6 +82,7 @@ export default function LancamentosTab({
 
   const [mode, setMode] = useState<Mode>('abastecimentos');
   const [searchQuery, setSearchQuery] = useState('');
+  const [abastecimentoSort, setAbastecimentoSort] = useState<'data_desc' | 'litros_desc' | 'litros_asc'>('data_desc');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -319,7 +320,15 @@ export default function LancamentosTab({
   const filteredAbastecimentos = abastecimentos.filter(ab => {
     const eq = equipamentos.find(e => e.id === ab.equipamentoId);
     return ab.data.includes(q) || ab.responsavel.toLowerCase().includes(q) || (eq && eq.prefixo.toLowerCase().includes(q));
-  }).sort((a,b) => b.data.localeCompare(a.data));
+  }).sort((a,b) => {
+    if (abastecimentoSort === 'litros_desc') {
+      return b.quantidadeLitros - a.quantidadeLitros || b.data.localeCompare(a.data);
+    }
+    if (abastecimentoSort === 'litros_asc') {
+      return a.quantidadeLitros - b.quantidadeLitros || b.data.localeCompare(a.data);
+    }
+    return b.data.localeCompare(a.data) || b.hora.localeCompare(a.hora);
+  });
 
   const filteredLubrificacoes = lubrificacoes.filter(lub => {
     const eq = equipamentos.find(e => e.id === lub.equipamentoId);
@@ -379,7 +388,7 @@ export default function LancamentosTab({
       </div>
 
       {/* Quick Search */}
-      <div className="flex items-center gap-3 bg-slate-900 border border-slate-850 p-3 rounded-2xl">
+      <div className="flex flex-col md:flex-row md:items-center gap-3 bg-slate-900 border border-slate-850 p-3 rounded-2xl">
         <div className="relative flex-1">
           <Search className="absolute left-3.5 top-2.5 w-4.5 h-4.5 text-slate-600" />
           <input 
@@ -390,6 +399,18 @@ export default function LancamentosTab({
             className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500 transition-colors"
           />
         </div>
+        {mode === 'abastecimentos' && (
+          <select
+            value={abastecimentoSort}
+            onChange={(e) => setAbastecimentoSort(e.target.value as 'data_desc' | 'litros_desc' | 'litros_asc')}
+            className="w-full md:w-64 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
+            title="Ordenar abastecimentos"
+          >
+            <option value="data_desc">Mais recentes primeiro</option>
+            <option value="litros_desc">Maior volume para menor</option>
+            <option value="litros_asc">Menor volume para maior</option>
+          </select>
+        )}
       </div>
 
       {/* Log Form Editor Card */}
