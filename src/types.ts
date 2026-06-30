@@ -136,6 +136,22 @@ export interface ListaPresenca {
   observacoes?: string;
 }
 
+export interface OrdemServico {
+  id: string;
+  numero: string; // ex: OS-0001 (gerado automaticamente)
+  equipamentoId: string;
+  tipo: 'Preventiva' | 'Corretiva' | 'Preditiva' | 'Revisão';
+  prioridade: 'Baixa' | 'Média' | 'Alta' | 'Urgente';
+  descricao: string;
+  status: 'Aberta' | 'Em Andamento' | 'Aguardando Peça' | 'Concluída' | 'Cancelada';
+  dataAbertura: string; // YYYY-MM-DD
+  dataConclusao?: string; // YYYY-MM-DD
+  responsavel: string;
+  custoEstimado?: number;
+  custoFinal?: number;
+  observacao: string;
+}
+
 export interface AppNotification {
   id: string;
   type: 'info' | 'success' | 'warning' | 'error';
