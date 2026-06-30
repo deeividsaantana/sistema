@@ -28,6 +28,7 @@ interface ConfiguracoesTabProps {
   onResetToDefault: () => void;
   onClearAllData: () => void;
   onImportFullData: (importedJson: string) => boolean;
+  onImportFilteredByDate: (importedJson: string, dataInicio: string, dataFim: string) => { success: boolean; message: string };
   onExportFullData: () => string;
   isFirebaseConnected: boolean;
   isAutoSyncEnabled: boolean;
@@ -42,6 +43,7 @@ export default function ConfiguracoesTab({
   onResetToDefault,
   onClearAllData,
   onImportFullData,
+  onImportFilteredByDate,
   onExportFullData,
   isFirebaseConnected,
   isAutoSyncEnabled,
@@ -55,6 +57,13 @@ export default function ConfiguracoesTab({
   
   const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [importMsg, setImportMsg] = useState('');
+
+  // Importação seletiva por período
+  const filteredFileInputRef = useRef<HTMLInputElement>(null);
+  const [filtroDataInicio, setFiltroDataInicio] = useState('');
+  const [filtroDataFim, setFiltroDataFim] = useState('');
+  const [pendingFileText, setPendingFileText] = useState<string | null>(null);
+  const [pendingFileName, setPendingFileName] = useState('');
   
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -109,6 +118,34 @@ export default function ConfiguracoesTab({
     reader.readAsText(file);
     // Reset file input value
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Seleciona o arquivo para importação seletiva por período (não importa ainda,
+  // espera o usuário escolher as datas e confirmar)
+  const handleFilteredFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    setPendingFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setPendingFileText(event.target?.result as string);
+      setImportStatus('idle');
+      setImportMsg('');
+    };
+    reader.readAsText(file);
+    if (filteredFileInputRef.current) filteredFileInputRef.current.value = '';
+  };
+
+  const handleConfirmFilteredImport = () => {
+    if (!pendingFileText) return;
+    const result = onImportFilteredByDate(pendingFileText, filtroDataInicio, filtroDataFim);
+    setImportStatus(result.success ? 'success' : 'error');
+    setImportMsg(result.message);
+    if (result.success) {
+      setPendingFileText(null);
+      setPendingFileName('');
+    }
   };
 
   return (
@@ -225,6 +262,65 @@ export default function ConfiguracoesTab({
                 {importStatus === 'success' ? '✓' : '⚠️'} {importMsg}
               </div>
             )}
+
+            {/* Importação Seletiva por Período */}
+            <div className="border-t border-slate-850 pt-4 space-y-3">
+              <h3 className="text-xs font-extrabold text-white uppercase tracking-wider font-mono">Importar Apenas um Período Específico</h3>
+              <p className="text-xxs text-slate-400 leading-relaxed">
+                Escolha um arquivo de backup e selecione a data inicial e final desejada. Apenas os abastecimentos, lubrificações, RDOs e listas de presença daquele intervalo serão trazidos — nada do que já está salvo é apagado.
+              </p>
+
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="space-y-1">
+                  <label className="text-xxs font-bold uppercase tracking-wider text-slate-400">Data Início</label>
+                  <input
+                    type="date"
+                    value={filtroDataInicio}
+                    onChange={e => setFiltroDataInicio(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xxs font-bold uppercase tracking-wider text-slate-400">Data Fim</label>
+                  <input
+                    type="date"
+                    value={filtroDataFim}
+                    onChange={e => setFiltroDataFim(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <button
+                  onClick={() => filteredFileInputRef.current?.click()}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-200 font-bold text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <Upload className="w-4 h-4" />
+                  {pendingFileName ? 'Trocar Arquivo' : 'Selecionar Arquivo'}
+                </button>
+                <input
+                  type="file"
+                  ref={filteredFileInputRef}
+                  onChange={handleFilteredFileChange}
+                  accept=".json"
+                  className="hidden"
+                />
+
+                {pendingFileText && (
+                  <button
+                    onClick={handleConfirmFilteredImport}
+                    disabled={!filtroDataInicio && !filtroDataFim}
+                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    <Check className="w-4 h-4" />
+                    Importar Período Selecionado
+                  </button>
+                )}
+              </div>
+
+              {pendingFileName && (
+                <p className="text-[10px] text-slate-500 font-mono">Arquivo pronto: {pendingFileName}{(!filtroDataInicio && !filtroDataFim) ? ' — escolha ao menos uma data para liberar a importação.' : ''}</p>
+              )}
+            </div>
           </div>
 
           {/* Sincronização em Nuvem (Firebase) */}
