@@ -95,6 +95,12 @@ export default function CadastrosTab({
   // Search State
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  // Advanced filters (contextuais por sub-aba)
+  const [filterStatus, setFilterStatus] = useState<string>('todos');
+  const [filterEmpresaId, setFilterEmpresaId] = useState<string>('todos');
+  const [filterObraId, setFilterObraId] = useState<string>('todos');
+  const [filterAtivo, setFilterAtivo] = useState<string>('todos');
+
   // Form togglers & editing identifiers
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -334,12 +340,40 @@ export default function CadastrosTab({
 
   const filteredEmpresas = empresas.filter(x => x.nome.toLowerCase().includes(q) || x.cnpj.includes(q) || x.responsavel.toLowerCase().includes(q));
   const filteredObras = obras.filter(x => x.nome.toLowerCase().includes(q) || x.endereco.toLowerCase().includes(q) || x.responsavel.toLowerCase().includes(q));
-  const filteredEquipamentos = equipamentos.filter(x => x.prefixo.toLowerCase().includes(q) || x.nome.toLowerCase().includes(q) || x.seriePlaca.toLowerCase().includes(q) || x.tipo.toLowerCase().includes(q));
-  const filteredFuncionarios = funcionarios.filter(x => x.nome.toLowerCase().includes(q) || x.cargo.toLowerCase().includes(q));
+  const filteredEquipamentos = equipamentos.filter(x => {
+    if (filterStatus !== 'todos' && x.status !== filterStatus) return false;
+    if (filterEmpresaId !== 'todos' && x.empresaId !== filterEmpresaId) return false;
+    if (filterObraId !== 'todos' && x.localAtualId !== filterObraId) return false;
+    return x.prefixo.toLowerCase().includes(q) || x.nome.toLowerCase().includes(q) || x.seriePlaca.toLowerCase().includes(q) || x.tipo.toLowerCase().includes(q);
+  });
+  const filteredFuncionarios = funcionarios.filter(x => {
+    if (filterEmpresaId !== 'todos' && x.empresaId !== filterEmpresaId) return false;
+    if (filterAtivo !== 'todos' && String(x.ativo) !== filterAtivo) return false;
+    return x.nome.toLowerCase().includes(q) || x.cargo.toLowerCase().includes(q);
+  });
   const filteredComboios = comboios.filter(x => x.nome.toLowerCase().includes(q) || x.placa.toLowerCase().includes(q) || x.responsavel.toLowerCase().includes(q));
   const filteredCombustiveis = combustiveis.filter(x => x.nome.toLowerCase().includes(q));
   const filteredLubrificantes = lubrificantes.filter(x => x.nome.toLowerCase().includes(q));
   const filteredEtapas = etapas.filter(x => x.nome.toLowerCase().includes(q));
+
+  const clearAdvancedFilters = () => {
+    setFilterStatus('todos');
+    setFilterEmpresaId('todos');
+    setFilterObraId('todos');
+    setFilterAtivo('todos');
+    setSearchQuery('');
+  };
+
+  const hasAdvancedFilters = filterStatus !== 'todos' || filterEmpresaId !== 'todos' || filterObraId !== 'todos' || filterAtivo !== 'todos' || searchQuery !== '';
+
+  const currentFilteredCount = subTab === 'empresas' ? filteredEmpresas.length
+    : subTab === 'obras' ? filteredObras.length
+    : subTab === 'equipamentos' ? filteredEquipamentos.length
+    : subTab === 'funcionarios' ? filteredFuncionarios.length
+    : subTab === 'comboios' ? filteredComboios.length
+    : subTab === 'combustiveis' ? filteredCombustiveis.length
+    : subTab === 'lubrificantes' ? filteredLubrificantes.length
+    : filteredEtapas.length;
 
   // Get count of records
   const getSubTabCount = (tab: SubTab) => {
@@ -392,7 +426,7 @@ export default function CadastrosTab({
           return (
             <button
               key={tab.id}
-              onClick={() => { setSubTab(tab.id as SubTab); setIsFormOpen(false); setSearchQuery(''); resetFormState(); }}
+              onClick={() => { setSubTab(tab.id as SubTab); setIsFormOpen(false); setSearchQuery(''); clearAdvancedFilters(); resetFormState(); }}
               className={`py-3.5 px-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 ${active ? 'bg-emerald-600/10 border-emerald-500 text-emerald-400 font-extrabold' : 'bg-slate-900 border-slate-850 text-slate-400 hover:border-slate-800 hover:text-slate-200'}`}
             >
               <Icon className="w-5 h-5 shrink-0" />
@@ -404,24 +438,100 @@ export default function CadastrosTab({
       </div>
 
       {/* Main Filter Action Bar */}
-      <div className="flex items-center gap-3 bg-slate-900 border border-slate-850 p-3 rounded-2xl">
-        <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-2.5 w-4.5 h-4.5 text-slate-600" />
-          <input 
-            type="text"
-            placeholder="Pesquisa rápida por qualquer termo..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500 transition-colors"
-          />
+      <div className="bg-slate-900 border border-slate-850 p-3 rounded-2xl space-y-2.5">
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-2.5 w-4.5 h-4.5 text-slate-600" />
+            <input 
+              type="text"
+              placeholder="Pesquisa rápida por qualquer termo..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500 transition-colors"
+            />
+          </div>
+          {searchQuery && (
+            <button 
+              onClick={() => setSearchQuery('')}
+              className="text-xs text-slate-500 hover:text-white underline font-bold px-2 cursor-pointer"
+            >
+              Limpar
+            </button>
+          )}
         </div>
-        {searchQuery && (
-          <button 
-            onClick={() => setSearchQuery('')}
-            className="text-xs text-slate-500 hover:text-white underline font-bold px-2 cursor-pointer"
-          >
-            Limpar
-          </button>
+
+        {/* Contextual advanced filters per sub-tab */}
+        {(subTab === 'equipamentos' || subTab === 'funcionarios') && (
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="text-[10px] font-bold text-slate-500 font-mono uppercase mr-0.5">Filtros:</span>
+
+            {subTab === 'equipamentos' && (
+              <>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-300 focus:outline-none focus:border-emerald-500 cursor-pointer"
+                >
+                  <option value="todos">Todos os Status</option>
+                  <option value="Ativo">Ativo</option>
+                  <option value="Parado">Parado</option>
+                  <option value="Manutenção">Manutenção</option>
+                  <option value="Mobilizado">Mobilizado</option>
+                  <option value="Desmobilizado">Desmobilizado</option>
+                  <option value="Esperando motorista">Esperando motorista</option>
+                </select>
+
+                <select
+                  value={filterObraId}
+                  onChange={(e) => setFilterObraId(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-300 focus:outline-none focus:border-emerald-500 cursor-pointer"
+                >
+                  <option value="todos">Todas as Obras</option>
+                  {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                </select>
+              </>
+            )}
+
+            {subTab === 'funcionarios' && (
+              <select
+                value={filterAtivo}
+                onChange={(e) => setFilterAtivo(e.target.value)}
+                className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-300 focus:outline-none focus:border-emerald-500 cursor-pointer"
+              >
+                <option value="todos">Ativos e Inativos</option>
+                <option value="true">Somente Ativos</option>
+                <option value="false">Somente Inativos</option>
+              </select>
+            )}
+
+            <select
+              value={filterEmpresaId}
+              onChange={(e) => setFilterEmpresaId(e.target.value)}
+              className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-300 focus:outline-none focus:border-emerald-500 cursor-pointer"
+            >
+              <option value="todos">Todas as Empresas</option>
+              {empresas.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
+            </select>
+
+            {hasAdvancedFilters && (
+              <button
+                onClick={clearAdvancedFilters}
+                className="text-[11px] font-bold text-rose-400 hover:underline cursor-pointer"
+              >
+                Limpar filtros
+              </button>
+            )}
+
+            <span className="text-[10px] text-slate-600 font-mono ml-auto">
+              {currentFilteredCount} resultado{currentFilteredCount !== 1 ? 's' : ''}
+            </span>
+          </div>
+        )}
+
+        {!(subTab === 'equipamentos' || subTab === 'funcionarios') && (searchQuery || true) && (
+          <div className="text-[10px] text-slate-600 font-mono px-1">
+            {currentFilteredCount} resultado{currentFilteredCount !== 1 ? 's' : ''}
+          </div>
         )}
       </div>
 
