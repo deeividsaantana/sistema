@@ -16,7 +16,8 @@ import {
   Lubrificacao, 
   RdoDiario,
   HistoryLog,
-  ListaPresenca
+  ListaPresenca,
+  OrdemServico
 } from '../types';
 
 export const INITIAL_EMPRESAS: Empresa[] = [
@@ -275,3 +276,5 @@ export const INITIAL_PRESENCAS: ListaPresenca[] = [
   }
 ];
 
+
+export const INITIAL_ORDENS_SERVICO: OrdemServico[] = [];
