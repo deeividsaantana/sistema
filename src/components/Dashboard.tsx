@@ -19,7 +19,8 @@ import {
   Lubrificacao, 
   RdoDiario,
   HistoryLog,
-  ListaPresenca
+  ListaPresenca,
+  OrdemServico
 } from '../types';
 
 import { 
@@ -65,6 +66,7 @@ interface DashboardProps {
   rdos: RdoDiario[];
   historyLogs: HistoryLog[];
   listasPresenca?: ListaPresenca[];
+  ordensServico?: OrdemServico[];
   onNavigate: (tab: string) => void;
 }
 
@@ -82,6 +84,7 @@ export default function Dashboard({
   rdos,
   historyLogs,
   listasPresenca = [],
+  ordensServico = [],
   onNavigate
 }: DashboardProps) {
 
@@ -191,6 +194,33 @@ export default function Dashboard({
     };
   }).filter(item => item.presencas > 0);
 
+  // 7. Today's attendance summary (most recent diário per obra, prioritizing today's date)
+  const todayStr = new Date().toISOString().split('T')[0];
+  const latestListaPorObra = obras.map(site => {
+    const siteLists = listasPresenca.filter(p => p.obraId === site.id);
+    if (siteLists.length === 0) return null;
+    return [...siteLists].sort((a, b) => b.data.localeCompare(a.data))[0];
+  }).filter((x): x is ListaPresenca => x !== null);
+
+  const totalFuncionariosListados = latestListaPorObra.reduce((acc, l) => acc + l.funcionarios.length, 0);
+  const totalPresentesListados = latestListaPorObra.reduce((acc, l) => acc + l.funcionarios.filter(f => f.presente).length, 0);
+  const percPresencaGeral = totalFuncionariosListados > 0 ? Math.round((totalPresentesListados / totalFuncionariosListados) * 100) : 0;
+  const listasDeHoje = listasPresenca.filter(l => l.data === todayStr).length;
+
+  // 8. Maintenance (Ordens de Serviço) summary
+  const osAbertas = ordensServico.filter(os => os.status === 'Aberta' || os.status === 'Em Andamento' || os.status === 'Aguardando Peça');
+  const osUrgentes = osAbertas.filter(os => os.prioridade === 'Urgente');
+  const osConcluidasNoMes = ordensServico.filter(os => {
+    if (os.status !== 'Concluída' || !os.dataConclusao) return false;
+    const now = new Date();
+    const concl = new Date(os.dataConclusao + 'T00:00:00');
+    return concl.getMonth() === now.getMonth() && concl.getFullYear() === now.getFullYear();
+  }).length;
+  const osPorTipo = ['Preventiva', 'Corretiva', 'Preditiva', 'Revisão'].map(tipo => ({
+    tipo,
+    count: osAbertas.filter(os => os.tipo === tipo).length
+  })).filter(x => x.count > 0);
+
   // Recharts colors for fuel types (shades of green and dark gray)
   const PIE_COLORS = ['#10b981', '#34d399', '#059669', '#047857', '#6ee7b7'];
 
@@ -204,6 +234,17 @@ export default function Dashboard({
       type: 'warning',
       text: `Equipamento em Manutenção: ${eq.prefixo}`,
       details: `${eq.nome} necessita liberação da oficina.`
+    });
+  });
+
+  // Urgent open service orders
+  osUrgentes.forEach(os => {
+    const eq = equipamentos.find(e => e.id === os.equipamentoId);
+    pendingAlerts.push({
+      id: `alert-os-${os.id}`,
+      type: 'danger',
+      text: `OS Urgente: ${os.numero}`,
+      details: `${eq ? eq.prefixo : 'Equipamento'} — ${os.descricao || os.tipo}`
     });
   });
 
@@ -313,6 +354,79 @@ export default function Dashboard({
             </span>
           </div>
         </div>
+      </div>
+
+      {/* 2.5 Presença & Manutenção Summary Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" id="presenca-manutencao-summary-row">
+        {/* Presença Summary Card */}
+        <button
+          onClick={() => onNavigate('presenca')}
+          className="text-left bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm hover:border-emerald-500/30 transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xs uppercase tracking-widest font-black text-slate-400 font-mono flex items-center gap-1.5">
+              <ShieldAlert className="w-4 h-4 text-emerald-400" />
+              Presença Hoje
+            </h2>
+            <span className="text-[9px] text-emerald-400 font-bold group-hover:underline">Ver detalhes →</span>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <div>
+              <span className="text-3xl font-black text-white font-mono block">{percPresencaGeral}%</span>
+              <span className="text-[10px] text-slate-500 font-semibold block mt-0.5">
+                {totalPresentesListados} de {totalFuncionariosListados} no último diário por obra
+              </span>
+            </div>
+            <div className="flex-1 h-2.5 bg-slate-950 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${percPresencaGeral >= 85 ? 'bg-emerald-500' : percPresencaGeral >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                style={{ width: `${percPresencaGeral}%` }}
+              ></div>
+            </div>
+          </div>
+
+          <p className="text-[10px] text-slate-500 mt-3">
+            {listasDeHoje > 0 ? `${listasDeHoje} diário(s) de presença registrado(s) hoje.` : 'Nenhum diário de presença registrado hoje ainda.'}
+          </p>
+        </button>
+
+        {/* Manutenção Summary Card */}
+        <button
+          onClick={() => onNavigate('manutencao')}
+          className="text-left bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm hover:border-amber-500/30 transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xs uppercase tracking-widest font-black text-slate-400 font-mono flex items-center gap-1.5">
+              <Wrench className="w-4 h-4 text-amber-400" />
+              Manutenção de Equipamentos
+            </h2>
+            <span className="text-[9px] text-amber-400 font-bold group-hover:underline">Ver detalhes →</span>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <div>
+              <span className="text-3xl font-black text-white font-mono block">{osAbertas.length}</span>
+              <span className="text-[10px] text-slate-500 font-semibold block mt-0.5">Ordens de serviço em aberto</span>
+            </div>
+            {osUrgentes.length > 0 && (
+              <div className="px-2.5 py-1 bg-rose-500/10 border border-rose-500/20 rounded-lg">
+                <span className="text-[10px] font-black text-rose-400">{osUrgentes.length} urgente{osUrgentes.length !== 1 ? 's' : ''}</span>
+              </div>
+            )}
+            <span className="text-[10px] text-slate-500 ml-auto">{osConcluidasNoMes} concluída(s) no mês</span>
+          </div>
+
+          {osPorTipo.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {osPorTipo.map(item => (
+                <span key={item.tipo} className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-950 border border-slate-800 text-slate-400">
+                  {item.tipo}: {item.count}
+                </span>
+              ))}
+            </div>
+          )}
+        </button>
       </div>
 
       {/* 3. Main Analytics Charts Row */}
