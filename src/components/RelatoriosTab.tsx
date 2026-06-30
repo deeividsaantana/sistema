@@ -35,7 +35,7 @@ import {
   AlertTriangle 
 } from 'lucide-react';
 
-import reneaLogoFull from '../assets/images/renea_logo_1782558137669.jpg';
+import reneaLogoFull from '../assets/images/renea_logo_new.png';
 import spmarLogo from '../assets/images/spmar_logo.png';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -516,7 +516,7 @@ export default function RelatoriosTab({
 
         // Logo RENEA (esquerda)
         if (logoBase64) {
-          doc.addImage(logoBase64, 'JPEG', 12, 9, 34, 16);
+          doc.addImage(logoBase64, 'PNG', 12, 9, 34, 16);
         } else {
           doc.setFont('Helvetica', 'bold');
           doc.setFontSize(16);
@@ -894,7 +894,7 @@ export default function RelatoriosTab({
 
       try {
         if (logoBase64) {
-          const logoId = wb.addImage({ base64: stripDataUrlPrefix(logoBase64), extension: 'jpeg' });
+          const logoId = wb.addImage({ base64: stripDataUrlPrefix(logoBase64), extension: 'png' });
           ws.addImage(logoId, {
             tl: { col: 0.1, row: 0.1 },
             ext: { width: 130, height: 52 }
