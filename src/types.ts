@@ -38,11 +38,16 @@ export interface Equipamento {
 
 export interface Funcionario {
   id: string;
+  matricula?: string;
   nome: string;
   cargo: string;
   telefone: string;
   empresaId: string;
   ativo: boolean;
+  liderMatricula?: string;
+  liderNome?: string;
+  area?: string;
+  responsavelArea?: string;
 }
 
 export interface Comboio {
@@ -134,6 +139,62 @@ export interface ListaPresenca {
   responsavel: string;
   funcionarios: PresencaItem[];
   observacoes?: string;
+}
+
+export type PresencaStatus =
+  | 'Presente'
+  | 'Ausente'
+  | 'Falta justificada'
+  | 'Atestado'
+  | 'Férias'
+  | 'Afastado'
+  | 'Outro';
+
+export interface GrupoEquipe {
+  id: string;
+  nome: string;
+  responsavel: string;
+  frenteServico: string;
+  obraId?: string;
+  funcionarioIds: string[];
+  status: 'ativo' | 'inativo';
+  token: string;
+  linkAtivo: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PresencaApontamento {
+  id: string;
+  data: string; // YYYY-MM-DD
+  horaEnvio: string; // HH:MM
+  grupoId: string;
+  grupoNome: string;
+  responsavel: string;
+  frenteServico: string;
+  funcionarioId: string;
+  funcionarioNome: string;
+  funcao: string;
+  status: PresencaStatus;
+  observacao: string;
+  tokenUsado: string;
+  createdAt: string;
+  updatedAt?: string;
+  atualizadoPor?: string;
+  motivoAlteracao?: string;
+}
+
+export interface HistoricoPresenca {
+  id: string;
+  presencaId: string;
+  grupoId: string;
+  funcionarioId: string;
+  data: string;
+  editadoPor: string;
+  editadoEm: string;
+  motivo: string;
+  valorAnterior: string;
+  valorNovo: string;
 }
 
 export interface OrdemServico {
