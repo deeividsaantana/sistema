@@ -17,7 +17,8 @@ import {
   Lubrificacao, 
   RdoDiario,
   HistoryLog,
-  ListaPresenca
+  ListaPresenca,
+  OrdemServico
 } from './types';
 
 import { 
@@ -33,7 +34,8 @@ import {
   INITIAL_LUBRIFICACOES, 
   INITIAL_RDOS,
   INITIAL_HISTORY_LOGS,
-  INITIAL_PRESENCAS
+  INITIAL_PRESENCAS,
+  INITIAL_ORDENS_SERVICO
 } from './utils/initialData';
 
 // Subcomponents Imports
@@ -42,7 +44,8 @@ import CadastrosTab from './components/CadastrosTab';
 import LancamentosTab from './components/LancamentosTab';
 import RelatoriosTab from './components/RelatoriosTab';
 import ConfiguracoesTab from './components/ConfiguracoesTab';
-import ManutencaoTab from './components/ManutencaoTab';
+import PresencaTab from './components/PresencaTab';
+import ManutencaoEquipamentosTab from './components/ManutencaoEquipamentosTab';
 
 // Motion and Logo Import
 import { motion, AnimatePresence } from 'motion/react';
@@ -76,7 +79,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   XCircle,
-  Clock
+  Clock,
+  Wrench
 } from 'lucide-react';
 
 import { AppNotification } from './types';
@@ -119,6 +123,7 @@ export default function App() {
   const [lubrificacoes, setLubrificacoes] = useState<Lubrificacao[]>([]);
   const [rdos, setRdos] = useState<RdoDiario[]>([]);
   const [listasPresenca, setListasPresenca] = useState<ListaPresenca[]>([]);
+  const [ordensServico, setOrdensServico] = useState<OrdemServico[]>([]);
   const [historyLogs, setHistoryLogs] = useState<HistoryLog[]>([]);
 
   // Hydrate states from localstorage on mount
@@ -144,6 +149,7 @@ export default function App() {
       localStorage.setItem('renea_lubrificacoes', JSON.stringify(INITIAL_LUBRIFICACOES));
       localStorage.setItem('renea_rdos', JSON.stringify(INITIAL_RDOS));
       localStorage.setItem('renea_listas_presenca', JSON.stringify(INITIAL_PRESENCAS));
+      localStorage.setItem('renea_ordens_servico', JSON.stringify(INITIAL_ORDENS_SERVICO));
       localStorage.setItem('renea_history_logs', JSON.stringify(INITIAL_HISTORY_LOGS));
       localStorage.setItem('renea_notifications', JSON.stringify(getInitialNotifications()));
       localStorage.setItem('renea_data_loaded_v2', 'true');
@@ -160,6 +166,7 @@ export default function App() {
       setLubrificacoes(INITIAL_LUBRIFICACOES);
       setRdos(INITIAL_RDOS);
       setListasPresenca(INITIAL_PRESENCAS);
+      setOrdensServico(INITIAL_ORDENS_SERVICO);
       setHistoryLogs(INITIAL_HISTORY_LOGS);
       setNotifications(getInitialNotifications());
     } else {
@@ -175,6 +182,7 @@ export default function App() {
       const savedLubrificacoes = localStorage.getItem('renea_lubrificacoes');
       const savedRdos = localStorage.getItem('renea_rdos');
       const savedListasPresenca = localStorage.getItem('renea_listas_presenca');
+      const savedOrdensServico = localStorage.getItem('renea_ordens_servico');
       const savedHistory = localStorage.getItem('renea_history_logs');
       const savedNotifications = localStorage.getItem('renea_notifications');
 
@@ -190,6 +198,7 @@ export default function App() {
       setLubrificacoes(savedLubrificacoes ? JSON.parse(savedLubrificacoes) : INITIAL_LUBRIFICACOES);
       setRdos(savedRdos ? JSON.parse(savedRdos) : INITIAL_RDOS);
       setListasPresenca(savedListasPresenca ? JSON.parse(savedListasPresenca) : INITIAL_PRESENCAS);
+      setOrdensServico(savedOrdensServico ? JSON.parse(savedOrdensServico) : INITIAL_ORDENS_SERVICO);
       setHistoryLogs(savedHistory ? JSON.parse(savedHistory) : INITIAL_HISTORY_LOGS);
       setNotifications(savedNotifications ? JSON.parse(savedNotifications) : getInitialNotifications());
     }
@@ -815,7 +824,7 @@ export default function App() {
     }
     const ob = obras.find(o => o.id === item.obraId);
     saveAndLog(
-      'Manutenção', 
+      'Presença', 
       isNew ? 'Criou' : 'Editou', 
       `${isNew ? 'Registrou' : 'Editou'} Lista de Presença para obra "${ob ? ob.nome : 'Geral'}" no dia ${item.data}.`,
       historyLogs,
@@ -827,10 +836,10 @@ export default function App() {
   };
 
   const handleDeleteListaPresenca = (id: string) => {
-    const item = listasPresenca.find(x => x.id !== id); // Note: keeping existing logic, but we can fix typo if needed
+    const item = listasPresenca.find(x => x.id === id);
     const updated = listasPresenca.filter(x => x.id !== id);
     saveAndLog(
-      'Manutenção', 
+      'Presença', 
       'Excluiu', 
       `Excluiu Lista de Presença do dia ${item ? item.data : ''}.`,
       historyLogs,
@@ -839,6 +848,52 @@ export default function App() {
         localStorage.setItem('renea_listas_presenca', JSON.stringify(updated));
       }
     );
+  };
+
+  const handleSaveOrdemServico = (item: OrdemServico, isNew: boolean) => {
+    let updated;
+    if (isNew) {
+      updated = [...ordensServico, item];
+    } else {
+      updated = ordensServico.map(x => x.id === item.id ? item : x);
+    }
+    const eq = equipamentos.find(e => e.id === item.equipamentoId);
+    saveAndLog(
+      'Manutenção',
+      isNew ? 'Criou' : 'Editou',
+      `${isNew ? 'Abriu' : 'Atualizou'} a ${item.numero} (${item.tipo}) para o equipamento "${eq ? eq.prefixo : 'desconhecido'}" — status: ${item.status}.`,
+      historyLogs,
+      () => {
+        setOrdensServico(updated);
+        localStorage.setItem('renea_ordens_servico', JSON.stringify(updated));
+      }
+    );
+  };
+
+  const handleDeleteOrdemServico = (id: string) => {
+    const item = ordensServico.find(x => x.id === id);
+    const updated = ordensServico.filter(x => x.id !== id);
+    saveAndLog(
+      'Manutenção',
+      'Excluiu',
+      `Excluiu a ordem de serviço ${item ? item.numero : ''}.`,
+      historyLogs,
+      () => {
+        setOrdensServico(updated);
+        localStorage.setItem('renea_ordens_servico', JSON.stringify(updated));
+      }
+    );
+  };
+
+  // Atualiza apenas o status de um equipamento (usado pela tela de Manutenção
+  // para refletir automaticamente o status da OS no cadastro de frota).
+  const handleUpdateEquipamentoStatus = (equipamentoId: string, status: Equipamento['status']) => {
+    const item = equipamentos.find(x => x.id === equipamentoId);
+    if (!item || item.status === status) return;
+    const updatedItem = { ...item, status };
+    const updated = equipamentos.map(x => x.id === equipamentoId ? updatedItem : x);
+    setEquipamentos(updated);
+    localStorage.setItem('renea_equipamentos', JSON.stringify(updated));
   };
 
   // Notifications helpers
@@ -886,6 +941,7 @@ export default function App() {
     lubrificacoes: Lubrificacao[];
     rdos: RdoDiario[];
     listasPresenca?: ListaPresenca[];
+    ordensServico?: OrdemServico[];
     historyLogs?: HistoryLog[];
   }) => {
     setEmpresas(imported.empresas || []);
@@ -900,6 +956,7 @@ export default function App() {
     setLubrificacoes(imported.lubrificacoes || []);
     setRdos(imported.rdos || []);
     setListasPresenca(imported.listasPresenca || []);
+    setOrdensServico(imported.ordensServico || []);
     
     const logs = imported.historyLogs || [{
       id: `log-${Date.now()}`,
@@ -923,6 +980,7 @@ export default function App() {
     localStorage.setItem('renea_lubrificacoes', JSON.stringify(imported.lubrificacoes || []));
     localStorage.setItem('renea_rdos', JSON.stringify(imported.rdos || []));
     localStorage.setItem('renea_listas_presenca', JSON.stringify(imported.listasPresenca || []));
+    localStorage.setItem('renea_ordens_servico', JSON.stringify(imported.ordensServico || []));
     localStorage.setItem('renea_history_logs', JSON.stringify(logs));
   };
 
@@ -939,6 +997,7 @@ export default function App() {
     setLubrificacoes(INITIAL_LUBRIFICACOES);
     setRdos(INITIAL_RDOS);
     setListasPresenca(INITIAL_PRESENCAS);
+    setOrdensServico(INITIAL_ORDENS_SERVICO);
     setHistoryLogs(INITIAL_HISTORY_LOGS);
 
     localStorage.setItem('renea_empresas', JSON.stringify(INITIAL_EMPRESAS));
@@ -953,6 +1012,7 @@ export default function App() {
     localStorage.setItem('renea_lubrificacoes', JSON.stringify(INITIAL_LUBRIFICACOES));
     localStorage.setItem('renea_rdos', JSON.stringify(INITIAL_RDOS));
     localStorage.setItem('renea_listas_presenca', JSON.stringify(INITIAL_PRESENCAS));
+    localStorage.setItem('renea_ordens_servico', JSON.stringify(INITIAL_ORDENS_SERVICO));
     localStorage.setItem('renea_history_logs', JSON.stringify(INITIAL_HISTORY_LOGS));
   };
 
@@ -969,6 +1029,7 @@ export default function App() {
     setLubrificacoes([]);
     setRdos([]);
     setListasPresenca([]);
+    setOrdensServico([]);
     setHistoryLogs([{
       id: `log-${Date.now()}`,
       timestamp: new Date().toLocaleString('pt-BR'),
@@ -990,6 +1051,7 @@ export default function App() {
     localStorage.setItem('renea_lubrificacoes', JSON.stringify([]));
     localStorage.setItem('renea_rdos', JSON.stringify([]));
     localStorage.setItem('renea_listas_presenca', JSON.stringify([]));
+    localStorage.setItem('renea_ordens_servico', JSON.stringify([]));
     localStorage.setItem('renea_history_logs', JSON.stringify([]));
   };
 
@@ -1007,6 +1069,7 @@ export default function App() {
       lubrificacoes,
       rdos,
       listasPresenca,
+      ordensServico,
       historyLogs
     }, null, 2);
   };
@@ -1067,11 +1130,13 @@ export default function App() {
       const incomingLubrificacoes = (parsed.lubrificacoes || []).filter((x: Lubrificacao) => inRange(x.data));
       const incomingRdos = (parsed.rdos || []).filter((x: RdoDiario) => inRange(x.data));
       const incomingPresencas = (parsed.listasPresenca || []).filter((x: ListaPresenca) => inRange(x.data));
+      const incomingOrdensServico = (parsed.ordensServico || []).filter((x: OrdemServico) => inRange(x.dataAbertura));
 
       const newAbastecimentos = mergeById(abastecimentos, incomingAbastecimentos);
       const newLubrificacoes = mergeById(lubrificacoes, incomingLubrificacoes);
       const newRdos = mergeById(rdos, incomingRdos);
       const newListasPresenca = mergeById(listasPresenca, incomingPresencas);
+      const newOrdensServico = mergeById(ordensServico, incomingOrdensServico);
 
       setEmpresas(newEmpresas); localStorage.setItem('renea_empresas', JSON.stringify(newEmpresas));
       setObras(newObras); localStorage.setItem('renea_obras', JSON.stringify(newObras));
@@ -1085,8 +1150,9 @@ export default function App() {
       setLubrificacoes(newLubrificacoes); localStorage.setItem('renea_lubrificacoes', JSON.stringify(newLubrificacoes));
       setRdos(newRdos); localStorage.setItem('renea_rdos', JSON.stringify(newRdos));
       setListasPresenca(newListasPresenca); localStorage.setItem('renea_listas_presenca', JSON.stringify(newListasPresenca));
+      setOrdensServico(newOrdensServico); localStorage.setItem('renea_ordens_servico', JSON.stringify(newOrdensServico));
 
-      const totalImportados = incomingAbastecimentos.length + incomingLubrificacoes.length + incomingRdos.length + incomingPresencas.length;
+      const totalImportados = incomingAbastecimentos.length + incomingLubrificacoes.length + incomingRdos.length + incomingPresencas.length + incomingOrdensServico.length;
       const logMsg = `Importou seletivamente ${totalImportados} registro(s) datado(s) entre ${dataInicio || 'início'} e ${dataFim || 'fim'}, além dos cadastros base.`;
       const newLog: HistoryLog = {
         id: `log-${Date.now()}`,
@@ -1246,11 +1312,19 @@ export default function App() {
           </button>
 
           <button 
+            onClick={() => setActiveTab('presenca')}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'presenca' ? 'bg-emerald-600/15 text-emerald-400 border-l-4 border-emerald-500 pl-3' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-100'}`}
+          >
+            <Users className="w-4 h-4 shrink-0" />
+            Presença
+          </button>
+
+          <button 
             onClick={() => setActiveTab('manutencao')}
             className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'manutencao' ? 'bg-emerald-600/15 text-emerald-400 border-l-4 border-emerald-500 pl-3' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-100'}`}
           >
-            <Users className="w-4 h-4 shrink-0" />
-            Manutenção & Presença
+            <Wrench className="w-4 h-4 shrink-0" />
+            Manutenção
           </button>
 
           <button 
@@ -1378,10 +1452,17 @@ export default function App() {
               </button>
 
               <button 
+                onClick={() => { setActiveTab('presenca'); setIsMobileMenuOpen(false); }}
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'presenca' ? 'bg-emerald-600/15 text-emerald-400' : 'text-slate-400 hover:bg-slate-800'}`}
+              >
+                <Users className="w-4.5 h-4.5" /> Presença
+              </button>
+
+              <button 
                 onClick={() => { setActiveTab('manutencao'); setIsMobileMenuOpen(false); }}
                 className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'manutencao' ? 'bg-emerald-600/15 text-emerald-400' : 'text-slate-400 hover:bg-slate-800'}`}
               >
-                <Users className="w-4.5 h-4.5" /> Manutenção & Presença
+                <Wrench className="w-4.5 h-4.5" /> Manutenção
               </button>
 
               <button 
@@ -1568,6 +1649,7 @@ export default function App() {
                 rdos={rdos}
                 historyLogs={historyLogs}
                 listasPresenca={listasPresenca}
+                ordensServico={ordensServico}
                 onNavigate={(tab) => setActiveTab(tab)}
               />
             )}
@@ -1623,13 +1705,23 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'manutencao' && (
-              <ManutencaoTab 
+            {activeTab === 'presenca' && (
+              <PresencaTab 
                 funcionarios={funcionarios}
                 obras={obras}
                 listasPresenca={listasPresenca}
                 onSaveListaPresenca={handleSaveListaPresenca}
                 onDeleteListaPresenca={handleDeleteListaPresenca}
+              />
+            )}
+
+            {activeTab === 'manutencao' && (
+              <ManutencaoEquipamentosTab 
+                equipamentos={equipamentos}
+                ordensServico={ordensServico}
+                onSaveOrdemServico={handleSaveOrdemServico}
+                onDeleteOrdemServico={handleDeleteOrdemServico}
+                onUpdateEquipamentoStatus={handleUpdateEquipamentoStatus}
               />
             )}
 
